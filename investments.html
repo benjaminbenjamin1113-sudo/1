@@ -183,8 +183,8 @@
   <div class="streak-flame">🔥</div>
   <div>
     <div class="streak-title">Contribution Streak</div>
-    <div class="streak-value" id="streakValue">0 months</div>
-    <div class="streak-sub" id="streakSub">Log a contribution each month to build your streak.</div>
+    <div class="streak-value" id="streakValue">0 weeks</div>
+    <div class="streak-sub" id="streakSub">Log a contribution each week to build your streak.</div>
   </div>
 </div>
 
@@ -406,58 +406,83 @@
     showToast(`Contribution of $${amount.toFixed(2)} logged ✓`);
   }
 
-  function getContributionMonthSet() {
-    const months = new Set();
+  function getWeekKeyFromDate(dateStr) {
+    const date = new Date(`${dateStr}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return null;
+
+    const day = date.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    date.setDate(date.getDate() + diffToMonday);
+
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  function getCurrentWeekKey(weekOffset = 0) {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday + weekOffset * 7);
+    monday.setHours(0, 0, 0, 0);
+
+    return [
+      monday.getFullYear(),
+      String(monday.getMonth() + 1).padStart(2, "0"),
+      String(monday.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  function getContributionWeekSet() {
+    const weeks = new Set();
     (data.investments || []).forEach(inv => {
       (inv.contributions || []).forEach(c => {
-        if (c && c.date) months.add(String(c.date).slice(0, 7));
+        if (!c || !c.date) return;
+        const weekKey = getWeekKeyFromDate(c.date);
+        if (weekKey) weeks.add(weekKey);
       });
     });
-    return months;
+    return weeks;
   }
 
   function computeStreak() {
-    const months = getContributionMonthSet();
-    const now = new Date();
-    let cursorYear = now.getFullYear();
-    let cursorMonth = now.getMonth();
+    const weeks = getContributionWeekSet();
+    const thisWeekKey = getCurrentWeekKey(0);
+    const currentWeekActive = weeks.has(thisWeekKey);
 
-    const thisKey = `${cursorYear}-${String(cursorMonth + 1).padStart(2, "0")}`;
-    const currentMonthActive = months.has(thisKey);
-
-    if (!currentMonthActive) {
-      cursorMonth -= 1;
-      if (cursorMonth < 0) { cursorMonth = 11; cursorYear -= 1; }
-    }
-
+    let offset = currentWeekActive ? 0 : -1;
     let streak = 0;
+
     while (true) {
-      const key = `${cursorYear}-${String(cursorMonth + 1).padStart(2, "0")}`;
-      if (months.has(key)) {
+      const key = getCurrentWeekKey(offset);
+      if (weeks.has(key)) {
         streak++;
-        cursorMonth -= 1;
-        if (cursorMonth < 0) { cursorMonth = 11; cursorYear -= 1; }
+        offset -= 1;
       } else {
         break;
       }
     }
 
-    return { streak, currentMonthActive };
+    return { streak, currentWeekActive };
   }
 
   function renderStreak() {
-    const { streak, currentMonthActive } = computeStreak();
+    const { streak, currentWeekActive } = computeStreak();
     const valueEl = document.getElementById("streakValue");
     const subEl = document.getElementById("streakSub");
 
-    valueEl.textContent = streak === 1 ? "1 month" : `${streak} months`;
+    valueEl.textContent = streak === 1 ? "1 week" : `${streak} weeks`;
 
     if (streak === 0) {
-      subEl.textContent = "Log a contribution each month to build your streak.";
-    } else if (currentMonthActive) {
-      subEl.textContent = "You've contributed this month — streak is live.";
+      subEl.textContent = "Log a contribution each week to build your streak.";
+    } else if (currentWeekActive) {
+      subEl.textContent = "You've contributed this week — streak is live.";
     } else {
-      subEl.textContent = "Log a contribution this month to keep your streak going.";
+      subEl.textContent = "Log a contribution this week to keep your streak going.";
     }
   }
 
