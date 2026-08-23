@@ -76,6 +76,54 @@
     background: var(--card);
   }
 
+  .auth-modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(15, 17, 21, 0.6);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+  }
+
+  .auth-modal-overlay.show {
+    display: flex;
+  }
+
+  .auth-modal-overlay .auth-card {
+    position: relative;
+    width: 100%;
+    max-width: 380px;
+    margin-bottom: 0;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+
+  .auth-modal-close {
+    display: none;
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    width: auto;
+    padding: 4px 9px;
+    border: none;
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+
+  .auth-modal-close:hover {
+    color: var(--text);
+  }
+
+  .auth-modal-close.show {
+    display: block;
+  }
+
   .auth-header {
     margin-bottom: 12px;
     color: var(--text-dim);
@@ -384,39 +432,43 @@
   Use a normal browser tab so local data can be saved on this device.
 </div>
 
-<div class="auth-card" id="authCard">
-  <div id="loggedOutForm">
-    <div class="auth-header" id="authTitle">Sign in to view your dashboard</div>
+<div class="auth-modal-overlay" id="authModalOverlay" onclick="handleOverlayClick(event)">
+  <div class="auth-card" id="authCard">
+    <button class="auth-modal-close" id="authModalCloseBtn" onclick="closeAuthModal()" aria-label="Close">✕</button>
 
-    <div class="form-row">
-      <div>
-        <label for="authUsername">Username</label>
-        <input
-          id="authUsername"
-          type="text"
-          placeholder="e.g. benjamin"
-          autocomplete="username"
-        >
+    <div id="loggedOutForm">
+      <div class="auth-header" id="authTitle">Sign in to view your dashboard</div>
+
+      <div class="form-row">
+        <div>
+          <label for="authUsername">Username</label>
+          <input
+            id="authUsername"
+            type="text"
+            placeholder="e.g. benjamin"
+            autocomplete="username"
+          >
+        </div>
+
+        <div>
+          <label for="authPassword">Password</label>
+          <input
+            id="authPassword"
+            type="password"
+            placeholder="••••••••"
+            autocomplete="current-password"
+          >
+        </div>
       </div>
 
-      <div>
-        <label for="authPassword">Password</label>
-        <input
-          id="authPassword"
-          type="password"
-          placeholder="••••••••"
-          autocomplete="current-password"
-        >
+      <div style="margin-top: 12px;">
+        <button id="authBtn" onclick="handleAuth()">Login</button>
       </div>
-    </div>
 
-    <div style="margin-top: 12px;">
-      <button id="authBtn" onclick="handleAuth()">Login</button>
+      <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
+        Don't have an account? Sign up
+      </span>
     </div>
-
-    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
-      Don't have an account? Sign up
-    </span>
   </div>
 </div>
 
@@ -1391,10 +1443,35 @@
     if (greetingEmoji) greetingEmoji.textContent = emoji;
   }
 
+  function openAuthModal(closable) {
+    const overlay = document.getElementById("authModalOverlay");
+    const closeBtn = document.getElementById("authModalCloseBtn");
+    overlay.classList.add("show");
+    overlay.dataset.closable = closable ? "true" : "false";
+    closeBtn.classList.toggle("show", closable);
+    const usernameInput = document.getElementById("authUsername");
+    if (usernameInput) usernameInput.focus();
+  }
+
+  function closeAuthModal() {
+    const overlay = document.getElementById("authModalOverlay");
+    if (overlay.dataset.closable !== "true") return; // required sign-in — can't be dismissed
+    overlay.classList.remove("show");
+  }
+
+  function handleOverlayClick(event) {
+    // Only close on a click that lands on the backdrop itself, not the card.
+    if (event.target.id === "authModalOverlay") closeAuthModal();
+  }
+
+  function focusSignIn() {
+    openAuthModal(true);
+  }
+
   onAuthStateChanged(auth, user => {
     currentUser = user;
 
-    const authCard = document.getElementById("authCard");
+    const overlay = document.getElementById("authModalOverlay");
     const loggedOutForm = document.getElementById("loggedOutForm");
     const dashboardContent = document.getElementById("dashboardContent");
     const welcomeLogoutBtn = document.getElementById("welcomeLogoutBtn");
@@ -1409,7 +1486,7 @@
       const formattedName =
         username.charAt(0).toUpperCase() + username.slice(1);
 
-      authCard.style.display = "none";
+      overlay.classList.remove("show");
       loggedOutForm.style.display = "none";
       dashboardContent.style.display = "block";
 
@@ -1439,7 +1516,7 @@
     if (hasLocalSchedule || hasLocalExpenses) {
       // Guest with local data — the dashboard is usable without signing in,
       // so keep the sign-in prompt tucked away until they ask for it.
-      authCard.style.display = "none";
+      overlay.classList.remove("show");
       dashboardContent.style.display = "block";
       welcomeSignInBtn.style.display = "inline-block";
       welcomeName.textContent = "Guest";
@@ -1449,22 +1526,17 @@
       render();
     } else {
       // No local data and not signed in — there's nothing else to show,
-      // so the sign-in prompt has to be visible immediately.
-      authCard.style.display = "block";
+      // so the sign-in prompt has to be visible immediately and can't be
+      // dismissed (there's nothing behind it to reveal).
       dashboardContent.style.display = "none";
+      openAuthModal(false);
       setDataStatus("Sign in to load your saved cloud data.");
     }
   });
 
-  function focusSignIn() {
-    const authCard = document.getElementById("authCard");
-    if (authCard) authCard.style.display = "block";
-    authCard?.scrollIntoView({ behavior: "smooth", block: "start" });
-    const usernameInput = document.getElementById("authUsername");
-    if (usernameInput) usernameInput.focus();
-  }
-
   window.focusSignIn = focusSignIn;
+  window.closeAuthModal = closeAuthModal;
+  window.handleOverlayClick = handleOverlayClick;
   window.handleAuth = handleAuth;
   window.handleLogout = handleLogout;
   window.toggleAuthMode = toggleAuthMode;
