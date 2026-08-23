@@ -89,6 +89,19 @@
   .goal-actions button { width: auto; padding: 8px 12px; font-size: 13px; }
   .del-btn { width: auto; padding: 4px 8px; background: none; color: var(--danger); font-size: 17px; }
   .empty-state { padding: 30px 10px; color: var(--text-dim); font-size: 14px; text-align: center; }
+
+  .section-heading { margin: 24px 0 10px; font-size: 15px; font-weight: 700; color: var(--text); }
+  .section-heading .sub { display: block; margin-top: 2px; font-size: 12px; font-weight: 400; color: var(--text-dim); }
+
+  .shared-card { border-left-color: #8b7fe0; }
+  .shared-card.done { border-left-color: var(--success); opacity: 0.75; }
+  .shared-members { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; }
+  .shared-member-chip {
+    padding: 5px 10px; border-radius: 20px; background: #21252e;
+    font-size: 11px; color: var(--text-dim);
+  }
+  .shared-member-chip .amt { color: var(--text); font-weight: 600; }
+  .shared-member-chip.me { border: 1px solid var(--accent); color: var(--text); }
   .toast {
     position: fixed; z-index: 9999; bottom: 20px; left: 50%; padding: 10px 18px;
     border: 1px solid var(--accent); border-radius: 20px; background: var(--card);
@@ -167,6 +180,37 @@
 
 <div id="goalList"></div>
 
+<div class="section-heading">
+  🤝 Shared Goals
+  <span class="sub">Team up with someone and save toward one target together.</span>
+</div>
+
+<div class="card">
+  <div class="form-row">
+    <div>
+      <label for="sharedGoalName">Goal</label>
+      <input id="sharedGoalName" placeholder="e.g. Vacation fund">
+    </div>
+    <div>
+      <label for="sharedGoalTarget">Target amount ($)</label>
+      <input id="sharedGoalTarget" type="number" min="0.01" step="0.01" placeholder="e.g. 2000">
+    </div>
+  </div>
+  <div class="form-row">
+    <div>
+      <label for="sharedGoalPartner">Partner's username</label>
+      <input id="sharedGoalPartner" type="text" placeholder="e.g. taylor">
+    </div>
+    <div>
+      <label for="sharedGoalDate">Target date (optional)</label>
+      <input id="sharedGoalDate" type="date">
+    </div>
+  </div>
+  <button onclick="createSharedGoal()">+ Create Shared Goal</button>
+</div>
+
+<div id="sharedGoalList"></div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
@@ -183,7 +227,12 @@
     getFirestore,
     doc,
     setDoc,
-    onSnapshot
+    updateDoc,
+    onSnapshot,
+    collection,
+    query,
+    where,
+    getDocs
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
   const firebaseConfig = {
@@ -210,6 +259,8 @@
   let storageWorking = true;
 
   let data = { goals: [] };
+  let sharedGoals = [];
+  let unsubscribeSharedGoals = null;
 
   function usernameToEmail(username) {
     const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
@@ -395,6 +446,182 @@
     render();
   }
 
+  function startSharedGoalsListener() {
+    if (!currentUser) return;
+    if (unsubscribeSharedGoals) { unsubscribeSharedGoals(); unsubscribeSharedGoals = null; }
+
+    const q = query(collection(db, "sharedGoals"), where("members", "array-contains", currentUser.uid));
+
+    unsubscribeSharedGoals = onSnapshot(q, snapshot => {
+      sharedGoals = [];
+      snapshot.forEach(docSnap => sharedGoals.push({ id: docSnap.id, ...docSnap.data() }));
+      renderSharedGoals();
+    }, error => {
+      console.error("Shared goals listener failed:", error);
+      if (error.code === "permission-denied") {
+        showToast("Can't load shared goals — Firestore rules need a 'sharedGoals' collection rule.");
+      }
+    });
+  }
+
+  async function createSharedGoal() {
+    if (!currentUser) {
+      showToast("Sign in to create a shared goal");
+      return;
+    }
+
+    const name = document.getElementById("sharedGoalName").value.trim();
+    const target = parseFloat(document.getElementById("sharedGoalTarget").value);
+    const partnerUsernameRaw = document.getElementById("sharedGoalPartner").value.trim();
+    const dateVal = document.getElementById("sharedGoalDate").value;
+
+    if (!name || isNaN(target) || target <= 0) {
+      showToast("Enter a goal name and a valid target amount");
+      return;
+    }
+
+    if (!partnerUsernameRaw) {
+      showToast("Enter your partner's username");
+      return;
+    }
+
+    const partnerUsername = partnerUsernameRaw.toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+    const myUsername = emailToUsername(currentUser.email);
+
+    if (partnerUsername === myUsername) {
+      showToast("Enter your partner's username, not your own");
+      return;
+    }
+
+    try {
+      const dirQuery = query(collection(db, "directory"), where("username", "==", partnerUsername));
+      const dirSnap = await getDocs(dirQuery);
+
+      if (dirSnap.empty) {
+        showToast(`No user found with username "${partnerUsername}"`);
+        return;
+      }
+
+      const partnerDoc = dirSnap.docs[0];
+      const partnerUid = partnerDoc.id;
+
+      const goalId = `shared_${Date.now()}`;
+
+      await setDoc(doc(db, "sharedGoals", goalId), {
+        name,
+        targetAmount: target,
+        targetDate: dateVal || null,
+        members: [currentUser.uid, partnerUid],
+        memberNames: { [currentUser.uid]: myUsername, [partnerUid]: partnerUsername },
+        contributions: { [currentUser.uid]: 0, [partnerUid]: 0 },
+        createdBy: currentUser.uid,
+        done: false,
+        createdAt: Date.now()
+      });
+
+      document.getElementById("sharedGoalName").value = "";
+      document.getElementById("sharedGoalTarget").value = "";
+      document.getElementById("sharedGoalPartner").value = "";
+      document.getElementById("sharedGoalDate").value = "";
+
+      showToast(`Shared goal created with ${partnerUsername} ✓`);
+    } catch (e) {
+      console.error("Could not create shared goal:", e);
+      showToast("Could not create shared goal. Check Firestore rules.");
+    }
+  }
+
+  async function addSharedContribution(goalId) {
+    const input = document.getElementById(`shared-contrib-${goalId}`);
+    const amount = parseFloat(input.value);
+    if (isNaN(amount) || amount <= 0) {
+      showToast("Enter a valid amount");
+      return;
+    }
+
+    const goalItem = sharedGoals.find(g => g.id === goalId);
+    if (!goalItem || !currentUser) return;
+
+    const myUid = currentUser.uid;
+    const newMine = (Number(goalItem.contributions?.[myUid]) || 0) + amount;
+    const otherUid = (goalItem.members || []).find(uid => uid !== myUid);
+    const otherAmount = Number(goalItem.contributions?.[otherUid]) || 0;
+    const total = newMine + otherAmount;
+    const done = total >= (Number(goalItem.targetAmount) || 0);
+
+    try {
+      await updateDoc(doc(db, "sharedGoals", goalId), {
+        [`contributions.${myUid}`]: newMine,
+        done
+      });
+      input.value = "";
+      showToast(`Added $${amount.toFixed(2)} to shared goal ✓`);
+    } catch (e) {
+      console.error("Could not add shared contribution:", e);
+      showToast("Could not save contribution. Check Firestore rules.");
+    }
+  }
+
+  function renderSharedGoals() {
+    const listEl = document.getElementById("sharedGoalList");
+    if (!listEl) return;
+
+    if (!currentUser) {
+      listEl.innerHTML = "";
+      return;
+    }
+
+    if (!sharedGoals.length) {
+      listEl.innerHTML = `<div class="card"><div class="empty-state">No shared goals yet. Create one above with a partner's username.</div></div>`;
+      return;
+    }
+
+    const sorted = sharedGoals.slice().sort((a, b) => (a.done === b.done) ? 0 : a.done ? 1 : -1);
+
+    listEl.innerHTML = sorted.map(goal => {
+      const target = Number(goal.targetAmount) || 0;
+      const contributions = goal.contributions || {};
+      const total = (goal.members || []).reduce((sum, uid) => sum + (Number(contributions[uid]) || 0), 0);
+      const pct = target > 0 ? Math.min(100, (total / target) * 100) : 0;
+      const remaining = Math.max(0, target - total);
+      const dueLabel = formatDate(goal.targetDate);
+
+      const memberChips = (goal.members || []).map(uid => {
+        const isMe = uid === currentUser.uid;
+        const label = isMe ? "You" : escapeHtml(goal.memberNames?.[uid] || "Partner");
+        const amt = (Number(contributions[uid]) || 0).toFixed(2);
+        return `<div class="shared-member-chip ${isMe ? "me" : ""}">${label}: <span class="amt">$${amt}</span></div>`;
+      }).join("");
+
+      return `
+        <div class="goal-card shared-card ${goal.done ? "done" : ""}">
+          <div class="goal-top">
+            <div class="goal-name ${goal.done ? "done-text" : ""}">🤝 ${escapeHtml(goal.name)}</div>
+          </div>
+          <div class="shared-members">${memberChips}</div>
+          <div class="goal-amounts">
+            <span class="cur">$${total.toFixed(2)}</span> of
+            <span class="tgt">$${target.toFixed(2)}</span>
+            (${pct.toFixed(0)}%)
+          </div>
+          <div class="progress-bar-bg">
+            <div class="progress-bar-fill ${goal.done ? "done" : ""}" style="width:${pct}%"></div>
+          </div>
+          <div class="goal-meta">
+            ${goal.done ? "🎉 Goal reached!" : `$${remaining.toFixed(2)} left`}
+            ${dueLabel ? ` · By ${dueLabel}` : ""}
+          </div>
+          ${!goal.done ? `
+            <div class="goal-actions">
+              <input id="shared-contrib-${goal.id}" type="number" min="0.01" step="0.01" placeholder="Add your $ amount">
+              <button onclick="addSharedContribution('${goal.id}')">Add</button>
+            </div>
+          ` : ""}
+        </div>
+      `;
+    }).join("");
+  }
+
   function monthsUntil(dateString) {
     if (!dateString) return null;
     const target = new Date(`${dateString}T00:00:00`);
@@ -514,10 +741,13 @@
   async function handleLogout() {
     try {
       if (unsubscribeGoals) { unsubscribeGoals(); unsubscribeGoals = null; }
+      if (unsubscribeSharedGoals) { unsubscribeSharedGoals(); unsubscribeSharedGoals = null; }
       await signOut(auth);
       currentUser = null;
+      sharedGoals = [];
       loadLocalData();
       render();
+      renderSharedGoals();
       setSyncStatus("Showing goals saved on this device.");
       showToast("Logged out");
     } catch (error) {
@@ -554,6 +784,7 @@
       userDisplay.textContent = emailToUsername(user.email);
       loadLocalData();
       startGoalsListener();
+      startSharedGoalsListener();
       registerInDirectory(user);
       render();
       return;
@@ -562,8 +793,10 @@
     loggedOutForm.style.display = "block";
     loggedInView.style.display = "none";
     loadLocalData();
+    sharedGoals = [];
     setSyncStatus("Sign in to sync goals to Firebase.");
     render();
+    renderSharedGoals();
   });
 
   window.handleAuth = handleAuth;
@@ -573,6 +806,8 @@
   window.addContribution = addContribution;
   window.toggleDone = toggleDone;
   window.deleteGoal = deleteGoal;
+  window.createSharedGoal = createSharedGoal;
+  window.addSharedContribution = addSharedContribution;
 
   (async () => {
     await checkStorage();

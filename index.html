@@ -392,6 +392,106 @@
     text-align: center;
   }
 
+  .recap-highlight {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .recap-stat {
+    flex: 1;
+    padding: 12px;
+    border-radius: 8px;
+    background: #12141a;
+    text-align: center;
+  }
+
+  .recap-stat-value {
+    font-size: 18px;
+    font-weight: 700;
+  }
+
+  .recap-stat-value.success { color: var(--success); }
+  .recap-stat-value.danger { color: var(--danger); }
+  .recap-stat-value.accent { color: var(--accent); }
+
+  .recap-stat-label {
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .recap-trend {
+    font-size: 11px;
+    margin-top: 2px;
+  }
+
+  .recap-trend.up { color: var(--danger); }
+  .recap-trend.down { color: var(--success); }
+
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 14px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  .chart-legend-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 3px;
+    margin-right: 5px;
+  }
+
+  .chart-legend-dot.income { background: var(--success); }
+  .chart-legend-dot.expense { background: var(--danger); }
+
+  .chart-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 6px;
+    height: 140px;
+    padding: 0 2px;
+  }
+
+  .chart-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 0;
+  }
+
+  .chart-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 100%;
+  }
+
+  .chart-bar {
+    width: 10px;
+    border-radius: 3px 3px 0 0;
+    min-height: 2px;
+  }
+
+  .chart-bar.income { background: var(--success); }
+  .chart-bar.expense { background: var(--danger); }
+
+  .chart-col-label {
+    margin-top: 6px;
+    color: var(--text-dim);
+    font-size: 10px;
+    text-align: center;
+    white-space: nowrap;
+  }
+
   .toast {
     position: fixed;
     z-index: 9999;
@@ -502,10 +602,18 @@
     <div class="net-sub" id="netSub">Estimated earnings minus expenses</div>
   </div>
 
-  <div class="net-card" id="netWorthCard" style="display: none;">
-    <div class="net-label">Net Worth</div>
-    <div class="net-value" id="netWorthValue">$0.00</div>
-    <div class="net-sub" id="netWorthSub">Investments + savings goals − debts</div>
+  <div class="overview-card" id="recapCard" style="display: none;">
+    <div class="section-title" id="recapTitle">🗓️ Monthly Recap</div>
+    <div id="recapContent"></div>
+  </div>
+
+  <div class="overview-card" id="chartCard" style="display: none;">
+    <div class="section-title">📊 Income vs. Expenses</div>
+    <div class="chart-legend">
+      <span><span class="chart-legend-dot income"></span>Income</span>
+      <span><span class="chart-legend-dot expense"></span>Expenses</span>
+    </div>
+    <div class="chart-row" id="incomeExpenseChart"></div>
   </div>
 
 <div class="apps-grid">
@@ -1004,51 +1112,48 @@
     return monday;
   }
 
+  function getMonthlyEarnings(offset) {
+    const key = monthKey(offset);
+    const [year, month] = key.split("-").map(Number);
+    let total = 0;
+
+    Object.entries(scheduleData.weeks || {}).forEach(([weekStartKey, shifts]) => {
+      if (!Array.isArray(shifts)) return;
+
+      shifts.forEach(shift => {
+        const shiftDate = getShiftDate(weekStartKey, shift.day);
+        if (!shiftDate) return;
+
+        if (shiftDate.getFullYear() === year && shiftDate.getMonth() === month - 1) {
+          total += (Number(shift.hours) || 0) * (Number(shift.rate) || 0);
+        }
+      });
+    });
+
+    return total;
+  }
+
+  function getMonthlyExpenseTotal(offset) {
+    const key = monthKey(offset);
+    const list = Array.isArray(expenseData.months?.[key]) ? expenseData.months[key] : [];
+    return list.reduce((sum, expense) => sum + (Number(expense.amount) || 0), 0);
+  }
+
+  function formatMonthShort(offset) {
+    const key = monthKey(offset);
+    const [year, month] = key.split("-").map(Number);
+    return new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "short" });
+  }
+
   function render() {
     renderScheduleSection();
     renderExpenseSection();
     renderNetCard();
-    renderNetWorthCard();
+    renderMonthlyRecap();
+    renderIncomeExpenseChart();
     renderDebtsStat();
     renderGoalsStat();
     renderInvestmentsStat();
-  }
-
-  function renderNetWorthCard() {
-    const investments = investmentsData.investments || [];
-    const debts = debtsData.debts || [];
-    const goals = goalsData.goals || [];
-
-    const totalInvestments = investments.reduce((sum, inv) => sum + (Number(inv.currentValue) || 0), 0);
-
-    const totalOwed = debts.reduce((sum, debt) => {
-      const remaining = (Number(debt.originalAmount) || 0) - (Number(debt.paidAmount) || 0);
-      return sum + Math.max(0, remaining);
-    }, 0);
-
-    const totalGoalSavings = goals.reduce((sum, goal) => {
-      const saved = Math.min(Number(goal.currentAmount) || 0, Number(goal.targetAmount) || 0);
-      return sum + saved;
-    }, 0);
-
-    const netWorth = totalInvestments + totalGoalSavings - totalOwed;
-
-    const card = document.getElementById("netWorthCard");
-    const valueEl = document.getElementById("netWorthValue");
-    const subEl = document.getElementById("netWorthSub");
-
-    const hasAnyData = investments.length > 0 || debts.length > 0 || goals.length > 0;
-
-    if (!hasAnyData) {
-      card.style.display = "none";
-      return;
-    }
-
-    card.style.display = "block";
-    valueEl.textContent = `${netWorth >= 0 ? "+$" : "-$"}${Math.abs(netWorth).toFixed(2)}`;
-    valueEl.className = `net-value ${netWorth >= 0 ? "positive" : "negative"}`;
-    subEl.textContent =
-      `Investments $${totalInvestments.toFixed(0)} + goal savings $${totalGoalSavings.toFixed(0)} − debts $${totalOwed.toFixed(0)}`;
   }
 
   function renderDebtsStat() {
@@ -1316,6 +1421,130 @@
 
     netSub.textContent =
       `Current month: earned $${monthlyEarnings.toFixed(2)} · spent $${monthlyExpenses.toFixed(2)}`;
+  }
+
+  function renderMonthlyRecap() {
+    const card = document.getElementById("recapCard");
+    const content = document.getElementById("recapContent");
+
+    const income = getMonthlyEarnings(0);
+    const expenses = getMonthlyExpenseTotal(0);
+
+    if (income === 0 && expenses === 0) {
+      card.style.display = "none";
+      return;
+    }
+
+    card.style.display = "block";
+    document.getElementById("recapTitle").textContent =
+      `🗓️ ${formatMonthKey(monthKey(0))} Recap`;
+
+    const net = income - expenses;
+    const savingsRate = income > 0 ? (net / income) * 100 : null;
+
+    const prevIncome = getMonthlyEarnings(-1);
+    const prevExpenses = getMonthlyExpenseTotal(-1);
+
+    const currentMonthKey = monthKey(0);
+    const expenseList = Array.isArray(expenseData.months?.[currentMonthKey])
+      ? expenseData.months[currentMonthKey]
+      : [];
+
+    let topCategoryLine = "No expenses logged yet";
+
+    if (expenseList.length) {
+      const categoryTotals = {};
+
+      expenseList.forEach(expense => {
+        const category = expense.category || "Other";
+        categoryTotals[category] = (categoryTotals[category] || 0) + (Number(expense.amount) || 0);
+      });
+
+      const [topCategory, topTotal] = Object.entries(categoryTotals).sort((a, b) => b[1] - a[1])[0];
+      topCategoryLine = `${CATEGORY_EMOJIS[topCategory] || "📦"} ${escapeHtml(topCategory)} · $${topTotal.toFixed(2)}`;
+    }
+
+    function trendHtml(current, previous, higherIsBad) {
+      if (previous === 0) return "";
+      const change = ((current - previous) / previous) * 100;
+      if (Math.abs(change) < 0.5) return `<div class="recap-trend">Flat vs last month</div>`;
+      const isUp = change > 0;
+      const badDirection = higherIsBad ? isUp : !isUp;
+      const arrow = isUp ? "↑" : "↓";
+      return `<div class="recap-trend ${badDirection ? "up" : "down"}">${arrow} ${Math.abs(change).toFixed(0)}% vs last month</div>`;
+    }
+
+    content.innerHTML = `
+      <div class="recap-highlight">
+        <div class="recap-stat">
+          <div class="recap-stat-value success">$${income.toFixed(0)}</div>
+          <div class="recap-stat-label">Income</div>
+          ${trendHtml(income, prevIncome, false)}
+        </div>
+        <div class="recap-stat">
+          <div class="recap-stat-value danger">$${expenses.toFixed(0)}</div>
+          <div class="recap-stat-label">Expenses</div>
+          ${trendHtml(expenses, prevExpenses, true)}
+        </div>
+        <div class="recap-stat">
+          <div class="recap-stat-value ${net >= 0 ? "success" : "danger"}">
+            ${net >= 0 ? "+" : "-"}$${Math.abs(net).toFixed(0)}
+          </div>
+          <div class="recap-stat-label">Net Saved</div>
+        </div>
+      </div>
+
+      <div class="overview-row">
+        <div class="overview-label">📈 Savings rate</div>
+        <div class="overview-value ${savingsRate !== null && savingsRate >= 0 ? "success" : "danger"}">
+          ${savingsRate !== null ? `${savingsRate.toFixed(0)}%` : "—"}
+        </div>
+      </div>
+
+      <div class="overview-row">
+        <div class="overview-label">🏆 Top expense category</div>
+        <div class="overview-value">${topCategoryLine}</div>
+      </div>
+    `;
+  }
+
+  function renderIncomeExpenseChart() {
+    const card = document.getElementById("chartCard");
+    const chart = document.getElementById("incomeExpenseChart");
+
+    const months = [-5, -4, -3, -2, -1, 0].map(offset => ({
+      offset,
+      label: formatMonthShort(offset),
+      income: getMonthlyEarnings(offset),
+      expenses: getMonthlyExpenseTotal(offset)
+    }));
+
+    const hasAnyData = months.some(m => m.income > 0 || m.expenses > 0);
+
+    if (!hasAnyData) {
+      card.style.display = "none";
+      return;
+    }
+
+    card.style.display = "block";
+
+    const maxValue = Math.max(1, ...months.map(m => Math.max(m.income, m.expenses)));
+    const maxBarHeight = 110;
+
+    chart.innerHTML = months.map(m => {
+      const incomeHeight = Math.round((m.income / maxValue) * maxBarHeight);
+      const expenseHeight = Math.round((m.expenses / maxValue) * maxBarHeight);
+
+      return `
+        <div class="chart-col" title="${m.label}: earned $${m.income.toFixed(2)}, spent $${m.expenses.toFixed(2)}">
+          <div class="chart-bars">
+            <div class="chart-bar income" style="height:${Math.max(2, incomeHeight)}px"></div>
+            <div class="chart-bar expense" style="height:${Math.max(2, expenseHeight)}px"></div>
+          </div>
+          <div class="chart-col-label">${m.offset === 0 ? "Now" : m.label}</div>
+        </div>
+      `;
+    }).join("");
   }
 
   async function handleAuth() {

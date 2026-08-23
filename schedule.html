@@ -354,6 +354,7 @@
       <div class="week-label" id="weekLabel"></div>
       <button class="secondary" onclick="changeWeek(1)">Next →</button>
     </div>
+    <button class="secondary" style="width:100%; margin-top:10px;" onclick="downloadWeekCSV()">⬇ Download This Week</button>
   </div>
 
   <div class="card">
@@ -731,6 +732,55 @@ function changeWeek(delta) {
   render();
 }
 
+function csvEscape(value) {
+  const str = String(value ?? "");
+  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+}
+
+function downloadWeekCSV() {
+  const key = weekKey(currentWeekOffset);
+  const shifts = [...(data.weeks[key] || [])].sort((a, b) =>
+    DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start)
+  );
+
+  if (!shifts.length) {
+    showToast("No shifts to download for this week");
+    return;
+  }
+
+  const rows = [
+    ["Day", "Job", "Start", "End", "Hours", "Rate", "Pay"],
+    ...shifts.map(shift => [
+      shift.day,
+      shift.job,
+      formatTime(shift.start),
+      formatTime(shift.end),
+      (Number(shift.hours) || 0).toFixed(2),
+      shift.rate ? Number(shift.rate).toFixed(2) : "",
+      shift.rate ? ((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2) : ""
+    ])
+  ];
+
+  const totalHours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
+  const totalPay = shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0);
+  rows.push([]);
+  rows.push(["Total", "", "", "", totalHours.toFixed(2), "", totalPay ? totalPay.toFixed(2) : ""]);
+
+  const csv = rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `schedule_${key}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+
+  showToast("Week downloaded ✓");
+}
+
 function setView(view) {
   currentView = view;
 
@@ -1052,6 +1102,7 @@ window.setView = setView;
 window.jumpToWeek = jumpToWeek;
 window.addShift = addShift;
 window.deleteShift = deleteShift;
+window.downloadWeekCSV = downloadWeekCSV;
 
 (async () => {
   await checkStorage();
