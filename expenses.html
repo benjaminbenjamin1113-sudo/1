@@ -1,0 +1,1324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Monthly Expense Tracker</title>
+
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --card-hover: #21252e;
+    --accent: #ff8a3d;
+    --accent-soft: #3a2a1e;
+    --text: #eceef2;
+    --text-dim: #9aa0ab;
+    --border: #2a2e38;
+    --danger: #e5484d;
+    --success: #4ade80;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0 auto;
+    max-width: 720px;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+  }
+
+  .subtitle {
+    margin-bottom: 8px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .dashboard-link {
+    display: inline-block;
+    margin-bottom: 16px;
+    color: var(--accent);
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .dashboard-link:hover {
+    text-decoration: underline;
+  }
+
+  .sync-status {
+    min-height: 18px;
+    margin-bottom: 14px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .sync-status.success {
+    color: var(--success);
+  }
+
+  .sync-status.error {
+    color: #ff8a8f;
+  }
+
+  .storage-warning {
+    display: none;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    background: rgba(229, 72, 77, 0.15);
+    color: #ff8a8f;
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  .storage-warning.show {
+    display: block;
+  }
+
+  .card,
+  .auth-card {
+    margin-bottom: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  .form-row.full {
+    grid-template-columns: 1fr;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  input,
+  select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    background: #12141a;
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  input:focus,
+  select:focus {
+    border-color: var(--accent);
+  }
+
+  button {
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #1a1005;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  button:hover {
+    opacity: 0.9;
+  }
+
+  button.secondary {
+    width: auto;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+  }
+
+  button.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #1a1005;
+  }
+
+  .auth-header {
+    margin-bottom: 12px;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .auth-link {
+    display: block;
+    margin-top: 10px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    text-decoration: underline;
+  }
+
+  .auth-user-info {
+    color: var(--text);
+    font-size: 13px;
+  }
+
+  .auth-user-info span {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .view-nav,
+  .month-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .view-nav {
+    justify-content: flex-start;
+  }
+
+  .month-label {
+    color: var(--text);
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  .cat-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  .cat-chip {
+    padding: 6px 10px;
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    background: #12141a;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 12px;
+  }
+
+  .cat-chip:hover {
+    border-color: var(--accent);
+  }
+
+  .cat-chip.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #1a1005;
+    font-weight: 600;
+  }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat {
+    padding: 12px;
+    border-radius: 8px;
+    background: #12141a;
+    text-align: center;
+  }
+
+  .stat-value {
+    color: var(--accent);
+    font-size: 20px;
+    font-weight: 700;
+  }
+
+  .stat-label {
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+
+  .expense {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: #12141a;
+  }
+
+  .expense-info {
+    min-width: 0;
+    flex: 1;
+    font-size: 14px;
+  }
+
+  .expense-name {
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .expense-category {
+    margin-top: 2px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .expense-amount {
+    color: var(--danger);
+    font-size: 15px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .del-btn {
+    width: auto;
+    padding: 4px 8px;
+    background: none;
+    color: var(--danger);
+    font-size: 17px;
+  }
+
+  .cat-group {
+    margin-bottom: 16px;
+  }
+
+  .cat-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+  }
+
+  .cat-header-total {
+    color: var(--accent);
+    font-weight: 700;
+  }
+
+  .month-overview-card {
+    margin-bottom: 12px;
+  }
+
+  .month-overview-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .month-overview-title {
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .month-overview-total {
+    color: var(--danger);
+    font-size: 14px;
+    font-weight: 700;
+  }
+
+  .mini-cat-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .mini-cat-row:last-child {
+    border-bottom: none;
+  }
+
+  .empty-state {
+    padding: 30px 10px;
+    color: var(--text-dim);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .toast {
+    position: fixed;
+    z-index: 9999;
+    bottom: 20px;
+    left: 50%;
+    padding: 10px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    background: var(--card);
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%);
+    transition: opacity 0.3s;
+  }
+
+  .toast.show {
+    opacity: 1;
+  }
+
+  @media (max-width: 520px) {
+    .form-row {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>
+</head>
+
+<body>
+
+<h1>💸 Monthly Expenses</h1>
+<div class="subtitle">Track spending, categorize purchases, and spot patterns.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="sync-status" id="syncStatus">
+  Checking cloud connection…
+</div>
+
+<div class="storage-warning" id="storageWarning">
+  ⚠️ <strong>Saving is not available on this device.</strong>
+  Use a normal browser tab instead of private/incognito mode.
+</div>
+
+<div class="auth-card">
+  <div id="loggedOutForm">
+    <div class="auth-header" id="authTitle">Sign in to sync your expenses</div>
+
+    <div class="form-row">
+      <div>
+        <label for="authUsername">Username</label>
+        <input
+          id="authUsername"
+          type="text"
+          placeholder="e.g. benjamin"
+          autocomplete="username"
+        >
+      </div>
+
+      <div>
+        <label for="authPassword">Password</label>
+        <input
+          id="authPassword"
+          type="password"
+          placeholder="••••••••"
+          autocomplete="current-password"
+        >
+      </div>
+    </div>
+
+    <div style="margin-top: 12px;">
+      <button id="authBtn" onclick="handleAuth()">Login</button>
+    </div>
+
+    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
+      Don't have an account? Sign up
+    </span>
+  </div>
+
+  <div id="loggedInView" style="display: none; align-items: center; justify-content: space-between;">
+    <div class="auth-user-info">
+      Cloud synced: <span id="userDisplay"></span>
+    </div>
+
+    <button
+      class="secondary"
+      onclick="handleLogout()"
+      style="padding: 6px 12px; font-size: 12px;"
+    >
+      Logout
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="view-nav">
+    <button class="secondary active" id="btnSingleView" onclick="setView('single')">
+      Single Month
+    </button>
+
+    <button class="secondary" id="btnAllView" onclick="setView('all')">
+      All Months
+    </button>
+  </div>
+</div>
+
+<div id="singleView">
+
+  <div class="card">
+    <div class="month-nav">
+      <button class="secondary" onclick="changeMonth(-1)">← Prev</button>
+      <div class="month-label" id="monthLabel"></div>
+      <button class="secondary" onclick="changeMonth(1)">Next →</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-row">
+      <div>
+        <label for="expenseName">What was it?</label>
+        <input id="expenseName" placeholder="e.g. Groceries at Walmart">
+      </div>
+
+      <div>
+        <label for="expenseAmount">Amount ($)</label>
+        <input id="expenseAmount" type="number" min="0.01" step="0.01" placeholder="e.g. 45.99">
+      </div>
+    </div>
+
+    <div class="form-row full">
+      <div>
+        <label>Category</label>
+        <div class="cat-picker" id="catPicker"></div>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="expenseDate">Date</label>
+        <input id="expenseDate" type="date">
+      </div>
+
+      <div></div>
+    </div>
+
+    <button onclick="addExpense()">+ Add Expense</button>
+  </div>
+
+  <div class="card">
+    <div class="summary-grid" id="summary"></div>
+  </div>
+
+  <div class="card" id="expenseList"></div>
+</div>
+
+<div id="allMonthsView" style="display: none;"></div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    getFirestore,
+    doc,
+    setDoc,
+    onSnapshot
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
+    authDomain: "scheduler-609b0.firebaseapp.com",
+    projectId: "scheduler-609b0",
+    storageBucket: "scheduler-609b0.firebasestorage.app",
+    messagingSenderId: "151764758872",
+    appId: "1:151764758872:web:4382212aaa6e870395b52d",
+    measurementId: "G-MX8DN7YLB2"
+  };
+
+  const app = initializeApp(firebaseConfig);
+
+  try {
+    getAnalytics(app);
+  } catch (error) {
+    console.warn("Analytics bypassed for local environment.", error);
+  }
+
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const STORAGE_KEY = "benjamin-expense-tracker-data";
+
+  const CATEGORIES = [
+    { name: "Food", emoji: "🍔" },
+    { name: "Groceries", emoji: "🛒" },
+    { name: "Transport", emoji: "🚗" },
+    { name: "Bills", emoji: "💡" },
+    { name: "Rent", emoji: "🏠" },
+    { name: "Fun", emoji: "🎮" },
+    { name: "Shopping", emoji: "🛍️" },
+    { name: "Health", emoji: "💊" },
+    { name: "Other", emoji: "📦" }
+  ];
+
+  let currentUser = null;
+  let unsubscribeExpenses = null;
+  let currentMonthOffset = 0;
+  let currentView = "single";
+  let currentCategory = "Food";
+  let isSignUpMode = false;
+  let storageWorking = true;
+  let cloudReady = false;
+
+  let data = {
+    months: {}
+  };
+
+  function usernameToEmail(username) {
+    const cleanUsername = username
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9_.-]/g, "");
+
+    return `${cleanUsername}@scheduler.app`;
+  }
+
+  function emailToUsername(email) {
+    return email ? email.split("@")[0] : "";
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+
+  function setSyncStatus(message, type = "") {
+    const status = document.getElementById("syncStatus");
+    status.textContent = message;
+    status.className = `sync-status ${type}`;
+  }
+
+  function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+
+    setTimeout(() => {
+      toast.classList.remove("show");
+    }, 1800);
+  }
+
+  async function checkStorage() {
+    const warning = document.getElementById("storageWarning");
+
+    try {
+      localStorage.setItem("__expense_probe__", "ok");
+      const check = localStorage.getItem("__expense_probe__");
+      localStorage.removeItem("__expense_probe__");
+
+      storageWorking = check === "ok";
+
+      if (!storageWorking) {
+        warning.classList.add("show");
+      }
+    } catch (error) {
+      storageWorking = false;
+      warning.classList.add("show");
+    }
+  }
+
+  function loadLocalData() {
+    if (!storageWorking) {
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+
+      if (raw) {
+        const parsed = JSON.parse(raw);
+
+        data = {
+          months: parsed.months || {}
+        };
+      }
+    } catch (error) {
+      console.warn("Could not load local expenses.", error);
+    }
+  }
+
+  function saveLocalData() {
+    if (!storageWorking) {
+      return;
+    }
+
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    } catch (error) {
+      console.warn("Could not save local expenses.", error);
+    }
+  }
+
+  function getMonthDate(offset = 0) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth() + offset, 1);
+  }
+
+  function monthKey(offset = 0) {
+    const date = getMonthDate(offset);
+
+    return [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0")
+    ].join("-");
+  }
+
+  function formatMonthLabel(offset = 0) {
+    const date = getMonthDate(offset);
+
+    const label = date.toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric"
+    });
+
+    return offset === 0 ? `This Month (${label})` : label;
+  }
+
+  function formatDate(dateString) {
+    const date = new Date(`${dateString}T00:00:00`);
+
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric"
+    });
+  }
+
+  function getCategoryEmoji(categoryName) {
+    const category = CATEGORIES.find(item => item.name === categoryName);
+    return category ? category.emoji : "📦";
+  }
+
+  function getExpenseDocumentReference() {
+    if (!currentUser) {
+      return null;
+    }
+
+    return doc(db, "expenses", currentUser.uid);
+  }
+
+  async function saveCloudData() {
+    if (!currentUser) {
+      setSyncStatus("Saved only on this device. Sign in to sync to cloud.");
+      return true;
+    }
+
+    const expenseRef = getExpenseDocumentReference();
+
+    if (!expenseRef) {
+      return false;
+    }
+
+    try {
+      setSyncStatus("Saving expenses to cloud…");
+
+      await setDoc(expenseRef, {
+        months: data.months || {},
+        updatedAt: Date.now()
+      });
+
+      cloudReady = true;
+      setSyncStatus("✓ Expenses saved and synced to Firebase.", "success");
+
+      return true;
+    } catch (error) {
+      console.error("Cloud expense save failed:", error);
+
+      setSyncStatus(
+        "Cloud save failed. Your expense remains saved locally. Check Firestore rules.",
+        "error"
+      );
+
+      return false;
+    }
+  }
+
+  async function saveData() {
+    saveLocalData();
+    return saveCloudData();
+  }
+
+  function startExpenseListener() {
+    if (!currentUser) {
+      return;
+    }
+
+    if (unsubscribeExpenses) {
+      unsubscribeExpenses();
+      unsubscribeExpenses = null;
+    }
+
+    const expenseRef = getExpenseDocumentReference();
+
+    unsubscribeExpenses = onSnapshot(
+      expenseRef,
+      async snapshot => {
+        cloudReady = true;
+
+        if (snapshot.exists()) {
+          const cloudData = snapshot.data();
+
+          data = {
+            months: cloudData.months || {}
+          };
+
+          saveLocalData();
+
+          setSyncStatus("✓ Expenses loaded from Firebase.", "success");
+        } else {
+          const localMonthKeys = Object.keys(data.months || {});
+
+          if (localMonthKeys.length > 0) {
+            setSyncStatus("Syncing local expenses to Firebase…");
+
+            const saved = await saveCloudData();
+
+            if (saved) {
+              showToast("Local expenses synced to cloud ✓");
+            }
+          } else {
+            setSyncStatus("Ready to save expenses to Firebase.", "success");
+          }
+        }
+
+        render();
+      },
+      error => {
+        console.error("Cloud expense listener failed:", error);
+
+        setSyncStatus(
+          "Firebase cannot load expenses. Check your Firestore rules.",
+          "error"
+        );
+      }
+    );
+  }
+
+  function renderCategoryPicker() {
+    const picker = document.getElementById("catPicker");
+
+    picker.innerHTML = CATEGORIES.map(category => `
+      <button
+        type="button"
+        class="cat-chip ${category.name === currentCategory ? "active" : ""}"
+        onclick="selectCategory('${category.name}')"
+      >
+        ${category.emoji} ${category.name}
+      </button>
+    `).join("");
+  }
+
+  function selectCategory(category) {
+    currentCategory = category;
+    renderCategoryPicker();
+  }
+
+  function changeMonth(delta) {
+    currentMonthOffset += delta;
+    render();
+  }
+
+  function setView(view) {
+    currentView = view;
+
+    document.getElementById("singleView").style.display =
+      view === "single" ? "block" : "none";
+
+    document.getElementById("allMonthsView").style.display =
+      view === "all" ? "block" : "none";
+
+    document.getElementById("btnSingleView").classList.toggle(
+      "active",
+      view === "single"
+    );
+
+    document.getElementById("btnAllView").classList.toggle(
+      "active",
+      view === "all"
+    );
+
+    render();
+  }
+
+  function jumpToMonth(offset) {
+    currentMonthOffset = offset;
+    setView("single");
+  }
+
+  function offsetForKey(key) {
+    const [year, month] = key.split("-").map(Number);
+    const now = new Date();
+
+    return (
+      (year - now.getFullYear()) * 12 +
+      (month - 1 - now.getMonth())
+    );
+  }
+
+  async function addExpense() {
+    const name = document.getElementById("expenseName").value.trim();
+    const amount = Number.parseFloat(
+      document.getElementById("expenseAmount").value
+    );
+    const date = document.getElementById("expenseDate").value;
+
+    if (!name) {
+      showToast("Enter an expense name");
+      return;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast("Enter a valid amount");
+      return;
+    }
+
+    if (!date) {
+      showToast("Choose an expense date");
+      return;
+    }
+
+    const key = date.slice(0, 7);
+
+    if (!data.months[key]) {
+      data.months[key] = [];
+    }
+
+    data.months[key].push({
+      id: Date.now(),
+      name,
+      amount,
+      category: currentCategory,
+      date
+    });
+
+    saveLocalData();
+    render();
+
+    document.getElementById("expenseName").value = "";
+    document.getElementById("expenseAmount").value = "";
+
+    const savedToCloud = await saveCloudData();
+
+    if (savedToCloud) {
+      showToast("Expense added and saved to cloud ✓");
+    } else {
+      showToast("Expense added locally, but cloud save failed");
+    }
+  }
+
+  async function deleteExpense(id, key) {
+    if (!data.months[key]) {
+      return;
+    }
+
+    data.months[key] = data.months[key].filter(expense => expense.id !== id);
+
+    if (data.months[key].length === 0) {
+      delete data.months[key];
+    }
+
+    saveLocalData();
+    render();
+
+    const savedToCloud = await saveCloudData();
+
+    if (savedToCloud) {
+      showToast("Expense deleted and cloud updated ✓");
+    } else {
+      showToast("Deleted locally, but cloud update failed");
+    }
+  }
+
+  function renderAllMonths() {
+    const allMonthsView = document.getElementById("allMonthsView");
+
+    const keys = Object.keys(data.months || {})
+      .filter(key => Array.isArray(data.months[key]) && data.months[key].length > 0)
+      .sort((a, b) => b.localeCompare(a));
+
+    if (!keys.length) {
+      allMonthsView.innerHTML = `
+        <div class="card">
+          <div class="empty-state">
+            No expenses have been saved yet.
+          </div>
+        </div>
+      `;
+      return;
+    }
+
+    allMonthsView.innerHTML = keys.map(key => {
+      const expenses = data.months[key];
+
+      const total = expenses.reduce((sum, expense) => {
+        return sum + (Number(expense.amount) || 0);
+      }, 0);
+
+      const categories = {};
+
+      expenses.forEach(expense => {
+        const category = expense.category || "Other";
+
+        categories[category] =
+          (categories[category] || 0) + (Number(expense.amount) || 0);
+      });
+
+      const categoryRows = Object.entries(categories)
+        .sort((a, b) => b[1] - a[1])
+        .map(([category, amount]) => `
+          <div class="mini-cat-row">
+            <span>${getCategoryEmoji(category)} ${escapeHtml(category)}</span>
+            <strong>$${amount.toFixed(2)}</strong>
+          </div>
+        `)
+        .join("");
+
+      return `
+        <div class="card month-overview-card">
+          <div class="month-overview-header">
+            <div class="month-overview-title">${formatMonthFromKey(key)}</div>
+            <div class="month-overview-total">$${total.toFixed(2)}</div>
+          </div>
+
+          ${categoryRows}
+
+          <button
+            class="secondary"
+            style="margin-top: 12px;"
+            onclick="jumpToMonth(${offsetForKey(key)})"
+          >
+            View this month →
+          </button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function formatMonthFromKey(key) {
+    const [year, month] = key.split("-").map(Number);
+
+    return new Date(year, month - 1, 1).toLocaleDateString("en-US", {
+      month: "long",
+      year: "numeric"
+    });
+  }
+
+  function renderSingleMonth() {
+    document.getElementById("monthLabel").textContent =
+      formatMonthLabel(currentMonthOffset);
+
+    const selectedMonthKey = monthKey(currentMonthOffset);
+    const dateInput = document.getElementById("expenseDate");
+
+    if (
+      !dateInput.value ||
+      !dateInput.value.startsWith(selectedMonthKey)
+    ) {
+      const viewedMonth = getMonthDate(currentMonthOffset);
+      const now = new Date();
+
+      const isCurrentMonth =
+        viewedMonth.getFullYear() === now.getFullYear() &&
+        viewedMonth.getMonth() === now.getMonth();
+
+      if (isCurrentMonth) {
+        dateInput.value = now.toISOString().slice(0, 10);
+      } else {
+        dateInput.value = `${selectedMonthKey}-01`;
+      }
+    }
+
+    const expenses = Array.isArray(data.months?.[selectedMonthKey])
+      ? [...data.months[selectedMonthKey]]
+      : [];
+
+    expenses.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+    const total = expenses.reduce((sum, expense) => {
+      return sum + (Number(expense.amount) || 0);
+    }, 0);
+
+    const categoryTotals = {};
+
+    expenses.forEach(expense => {
+      const category = expense.category || "Other";
+
+      categoryTotals[category] =
+        (categoryTotals[category] || 0) + (Number(expense.amount) || 0);
+    });
+
+    const transactionCount = expenses.length;
+    const average = transactionCount ? total / transactionCount : 0;
+    const categoryCount = Object.keys(categoryTotals).length;
+
+    document.getElementById("summary").innerHTML = `
+      <div class="stat">
+        <div class="stat-value">$${total.toFixed(2)}</div>
+        <div class="stat-label">Total Spent</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-value">${transactionCount}</div>
+        <div class="stat-label">Transactions</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-value">$${average.toFixed(2)}</div>
+        <div class="stat-label">Average Purchase</div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-value">${categoryCount}</div>
+        <div class="stat-label">Categories</div>
+      </div>
+    `;
+
+    const expenseList = document.getElementById("expenseList");
+
+    if (!expenses.length) {
+      expenseList.innerHTML = `
+        <div class="empty-state">
+          No expenses logged for this month yet.
+        </div>
+      `;
+      return;
+    }
+
+    const grouped = {};
+
+    expenses.forEach(expense => {
+      const category = expense.category || "Other";
+
+      if (!grouped[category]) {
+        grouped[category] = [];
+      }
+
+      grouped[category].push(expense);
+    });
+
+    const sortedCategories = Object.keys(grouped)
+      .sort((categoryA, categoryB) => {
+        const totalA = grouped[categoryA].reduce(
+          (sum, expense) => sum + (Number(expense.amount) || 0),
+          0
+        );
+
+        const totalB = grouped[categoryB].reduce(
+          (sum, expense) => sum + (Number(expense.amount) || 0),
+          0
+        );
+
+        return totalB - totalA;
+      });
+
+    expenseList.innerHTML = sortedCategories.map(category => {
+      const categoryExpenses = grouped[category];
+
+      const categoryTotal = categoryExpenses.reduce(
+        (sum, expense) => sum + (Number(expense.amount) || 0),
+        0
+      );
+
+      return `
+        <div class="cat-group">
+          <div class="cat-header">
+            <span>${getCategoryEmoji(category)} ${escapeHtml(category)}</span>
+            <span class="cat-header-total">$${categoryTotal.toFixed(2)}</span>
+          </div>
+
+          ${categoryExpenses.map(expense => `
+            <div class="expense">
+              <div class="expense-info">
+                <div class="expense-name">${escapeHtml(expense.name || "Unnamed")}</div>
+                <div class="expense-category">${formatDate(expense.date)}</div>
+              </div>
+
+              <div class="expense-amount">
+                $${(Number(expense.amount) || 0).toFixed(2)}
+              </div>
+
+              <button
+                class="del-btn"
+                onclick="deleteExpense(${Number(expense.id)}, '${selectedMonthKey}')"
+                aria-label="Delete expense"
+              >
+                ✕
+              </button>
+            </div>
+          `).join("")}
+        </div>
+      `;
+    }).join("");
+  }
+
+  function render() {
+    renderCategoryPicker();
+
+    if (currentView === "all") {
+      renderAllMonths();
+      return;
+    }
+
+    renderSingleMonth();
+  }
+
+  async function handleAuth() {
+    const username = document.getElementById("authUsername").value.trim();
+    const password = document.getElementById("authPassword").value;
+
+    if (!username || !password) {
+      showToast("Enter a username and password");
+      return;
+    }
+
+    if (username.length < 3) {
+      showToast("Username must be at least 3 characters");
+      return;
+    }
+
+    const email = usernameToEmail(username);
+
+    try {
+      if (isSignUpMode) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast("Account created!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Welcome back!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+
+      const code = error.code || "";
+      let message = "Could not sign in.";
+
+      if (
+        code === "auth/invalid-credential" ||
+        code === "auth/user-not-found" ||
+        code === "auth/wrong-password"
+      ) {
+        message = "Invalid username or password";
+      } else if (code === "auth/email-already-in-use") {
+        message = "Username already taken";
+      } else if (code === "auth/weak-password") {
+        message = "Password must be at least 6 characters";
+      }
+
+      showToast(message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      if (unsubscribeExpenses) {
+        unsubscribeExpenses();
+        unsubscribeExpenses = null;
+      }
+
+      await signOut(auth);
+
+      currentUser = null;
+      cloudReady = false;
+
+      loadLocalData();
+      render();
+
+      setSyncStatus("Showing expenses saved on this device.");
+      showToast("Logged out");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to log out");
+    }
+  }
+
+  function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+
+    const title = document.getElementById("authTitle");
+    const button = document.getElementById("authBtn");
+    const toggle = document.getElementById("authToggle");
+
+    if (isSignUpMode) {
+      title.textContent = "Create an account to sync your expenses";
+      button.textContent = "Sign Up";
+      toggle.textContent = "Already have an account? Sign in";
+    } else {
+      title.textContent = "Sign in to sync your expenses";
+      button.textContent = "Login";
+      toggle.textContent = "Don't have an account? Sign up";
+    }
+  }
+
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+
+    const loggedOutForm = document.getElementById("loggedOutForm");
+    const loggedInView = document.getElementById("loggedInView");
+    const userDisplay = document.getElementById("userDisplay");
+
+    if (user) {
+      loggedOutForm.style.display = "none";
+      loggedInView.style.display = "flex";
+
+      userDisplay.textContent = emailToUsername(user.email);
+
+      loadLocalData();
+      startExpenseListener();
+      render();
+      return;
+    }
+
+    loggedOutForm.style.display = "block";
+    loggedInView.style.display = "none";
+
+    loadLocalData();
+    setSyncStatus("Sign in to sync expenses to Firebase.");
+    render();
+  });
+
+  window.handleAuth = handleAuth;
+  window.handleLogout = handleLogout;
+  window.toggleAuthMode = toggleAuthMode;
+  window.selectCategory = selectCategory;
+  window.changeMonth = changeMonth;
+  window.setView = setView;
+  window.jumpToMonth = jumpToMonth;
+  window.addExpense = addExpense;
+  window.deleteExpense = deleteExpense;
+
+  (async () => {
+    await checkStorage();
+    loadLocalData();
+    render();
+  })();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Leaderboard</title>
+
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --card-hover: #21252e;
+    --accent: #ff8a3d;
+    --accent-soft: #3a2a1e;
+    --text: #eceef2;
+    --text-dim: #9aa0ab;
+    --border: #2a2e38;
+    --danger: #e5484d;
+    --success: #4ade80;
+    --gold: #ffd166;
+    --silver: #c9ccd1;
+    --bronze: #d98a53;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 720px; padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .subtitle { margin-bottom: 8px; color: var(--text-dim); font-size: 14px; }
+  .dashboard-link { display: inline-block; margin-bottom: 16px; color: var(--accent); font-size: 13px; text-decoration: none; }
+  .dashboard-link:hover { text-decoration: underline; }
+  .sync-status { min-height: 18px; margin-bottom: 14px; color: var(--text-dim); font-size: 12px; }
+  .sync-status.success { color: var(--success); }
+  .sync-status.error { color: #ff8a8f; }
+  .storage-warning {
+    display: none; margin-bottom: 16px; padding: 12px 14px;
+    border: 1px solid var(--danger); border-radius: 10px;
+    background: rgba(229, 72, 77, 0.15); color: #ff8a8f; font-size: 13px; line-height: 1.4;
+  }
+  .storage-warning.show { display: block; }
+  .card, .auth-card {
+    margin-bottom: 16px; padding: 16px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--card);
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 12px; }
+  input, select {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    outline: none; background: #12141a; color: var(--text); font-size: 14px;
+  }
+  input:focus, select:focus { border-color: var(--accent); }
+  button {
+    width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
+    background: var(--accent); color: #1a1005; cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary {
+    width: auto; border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+  }
+  .auth-header { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; font-weight: 600; }
+  .auth-link {
+    display: block; margin-top: 10px; color: var(--accent); cursor: pointer;
+    font-size: 12px; text-align: center; text-decoration: underline;
+  }
+  .auth-user-info { color: var(--text); font-size: 13px; }
+  .auth-user-info span { color: var(--accent); font-weight: 600; }
+
+  .metric-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .metric-tab {
+    flex: 1; padding: 10px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text-dim); font-size: 13px; font-weight: 600;
+    text-align: center; cursor: pointer; transition: all 0.15s;
+  }
+  .metric-tab.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+
+  .rank-row {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 10px; padding: 12px 14px; border-radius: 10px;
+    background: #12141a; border-left: 3px solid var(--border);
+  }
+  .rank-row.me { border-left-color: var(--accent); background: var(--accent-soft); }
+  .rank-row.pos-1 { border-left-color: var(--gold); }
+  .rank-row.pos-2 { border-left-color: var(--silver); }
+  .rank-row.pos-3 { border-left-color: var(--bronze); }
+
+  .rank-badge {
+    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #21252e; font-size: 14px; font-weight: 800; color: var(--text-dim);
+  }
+  .pos-1 .rank-badge { background: var(--gold); color: #1a1005; }
+  .pos-2 .rank-badge { background: var(--silver); color: #1a1005; }
+  .pos-3 .rank-badge { background: var(--bronze); color: #1a1005; }
+
+  .rank-body { flex: 1; min-width: 0; }
+  .rank-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .rank-name { font-size: 14px; font-weight: 700; }
+  .rank-name .you-tag { color: var(--accent); font-size: 11px; font-weight: 600; margin-left: 6px; }
+  .rank-pct { font-size: 14px; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+  .rank-event { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; word-break: break-word; }
+  .progress-bar-bg { width: 100%; height: 8px; border-radius: 6px; background: #21252e; overflow: hidden; }
+  .progress-bar-fill { height: 100%; border-radius: 6px; background: var(--success); transition: width 0.3s; }
+
+  .empty-state { padding: 30px 10px; color: var(--text-dim); font-size: 14px; text-align: center; }
+
+  .season-banner {
+    margin-bottom: 16px; padding: 14px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent-soft), var(--card));
+    border: 1px solid var(--accent); font-size: 13px; display: flex;
+    justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .season-banner strong { color: var(--accent); }
+  .season-countdown { font-size: 12px; color: var(--text-dim); white-space: nowrap; }
+  .season-countdown strong { color: var(--success); }
+
+  .community-card {
+    margin-bottom: 16px; padding: 16px; border-radius: 12px;
+    border: 1px solid var(--border); background: var(--card);
+  }
+  .community-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+  .community-title { font-size: 15px; font-weight: 700; }
+  .community-pct { font-size: 15px; font-weight: 800; color: var(--accent); }
+  .community-sub { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+  .community-bar-bg { width: 100%; height: 12px; border-radius: 8px; background: #21252e; overflow: hidden; }
+  .community-bar-fill {
+    height: 100%; border-radius: 8px; transition: width 0.4s;
+    background: linear-gradient(90deg, var(--accent), var(--success));
+  }
+  .toast {
+    position: fixed; z-index: 9999; bottom: 20px; left: 50%; padding: 10px 18px;
+    border: 1px solid var(--accent); border-radius: 20px; background: var(--card);
+    font-size: 13px; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity 0.3s;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+
+<body>
+
+<h1>🏆 Leaderboard</h1>
+<div class="subtitle">See how you stack up on upcoming goals and shifts.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="season-banner">
+  <div>🏁 Season ends <strong id="seasonEndLabel">December 31</strong> — rankings reset after that.</div>
+  <div class="season-countdown" id="seasonCountdown"></div>
+</div>
+
+<div class="sync-status" id="syncStatus">Checking cloud connection…</div>
+
+<div class="storage-warning" id="storageWarning">
+  ⚠️ <strong>Saving is not available on this device.</strong>
+  Use a normal browser tab instead of private/incognito mode.
+</div>
+
+<div class="auth-card">
+  <div id="loggedOutForm">
+    <div class="auth-header" id="authTitle">Sign in to see the leaderboard</div>
+    <div class="form-row">
+      <div>
+        <label for="authUsername">Username</label>
+        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
+      </div>
+      <div>
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button id="authBtn" onclick="handleAuth()">Login</button>
+    </div>
+    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+  </div>
+  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
+    <div class="auth-user-info">Signed in: <span id="userDisplay"></span></div>
+    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">Logout</button>
+  </div>
+</div>
+
+<div id="leaderboardContent" style="display:none;">
+  <div class="community-card">
+    <div class="community-top">
+      <div class="community-title" id="communityTitle">🌍 Community Challenge: 10,000 Hours Together</div>
+      <div class="community-pct" id="communityPct">0%</div>
+    </div>
+    <div class="community-sub" id="communitySub">Every logged shift counts toward the team total — let's hit 10,000 hours by December 31.</div>
+    <div class="community-bar-bg">
+      <div class="community-bar-fill" id="communityBarFill" style="width:0%"></div>
+    </div>
+  </div>
+
+  <div class="metric-tabs">
+    <div class="metric-tab active" id="tabGoals" onclick="setMetric('goals')">🎯 Savings Goals</div>
+    <div class="metric-tab" id="tabHours" onclick="setMetric('hours')">🗓️ This Week's Hours</div>
+  </div>
+
+  <div class="card">
+    <div class="form-row" id="controlsRow">
+      <div>
+        <label for="searchFilter">Search participants</label>
+        <input id="searchFilter" type="text" placeholder="Filter by name…" oninput="render()">
+      </div>
+      <div id="hoursTargetWrap" style="display:none;">
+        <label for="hoursTarget">Weekly hours target (h)</label>
+        <input id="hoursTarget" type="number" min="1" step="1" value="40" oninput="render()">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="rankList"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    getFirestore,
+    collection,
+    doc,
+    onSnapshot
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
+    authDomain: "scheduler-609b0.firebaseapp.com",
+    projectId: "scheduler-609b0",
+    storageBucket: "scheduler-609b0.firebasestorage.app",
+    messagingSenderId: "151764758872",
+    appId: "1:151764758872:web:4382212aaa6e870395b52d",
+    measurementId: "G-MX8DN7YLB2"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  try { getAnalytics(app); } catch (e) { console.warn("Analytics bypassed.", e); }
+
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  const DAY_OFFSETS = {
+    Monday: 0, Tuesday: 1, Wednesday: 2, Thursday: 3,
+    Friday: 4, Saturday: 5, Sunday: 6
+  };
+
+  // Defaults shown until the admin-managed config/communityChallenge doc loads
+  // (or if it doesn't exist yet). The admin panel writes to this same doc.
+  let challenge = {
+    title: "Community Challenge: 10,000 Hours Together",
+    description: "Every logged shift counts toward the team total.",
+    targetHours: 10000,
+    endDate: "2026-12-31"
+  };
+
+  let unsubChallenge = null;
+
+  function getHoursTarget() {
+    const input = document.getElementById("hoursTarget");
+    const val = input ? parseFloat(input.value) : NaN;
+    return !isNaN(val) && val > 0 ? val : 40;
+  }
+
+  let currentUser = null;
+  let isSignUpMode = false;
+  let storageWorking = true;
+  let activeMetric = "goals";
+
+  let goalsDocs = {};   // uid -> { username, goals: [] }
+  let scheduleDocs = {}; // uid -> { username, weeks: {} }
+
+  let unsubGoals = null;
+  let unsubSchedule = null;
+
+  function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  function usernameToEmail(username) {
+    const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
+    return `${clean}@scheduler.app`;
+  }
+
+  function setSyncStatus(message, type = "") {
+    const status = document.getElementById("syncStatus");
+    status.textContent = message;
+    status.className = `sync-status ${type}`;
+  }
+
+  function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 1800);
+  }
+
+  async function checkStorage() {
+    const warning = document.getElementById("storageWarning");
+    try {
+      localStorage.setItem("__leaderboard_probe__", "ok");
+      const check = localStorage.getItem("__leaderboard_probe__");
+      localStorage.removeItem("__leaderboard_probe__");
+      storageWorking = check === "ok";
+      if (!storageWorking) warning.classList.add("show");
+    } catch (e) {
+      storageWorking = false;
+      warning.classList.add("show");
+    }
+  }
+
+  function clearListeners() {
+    if (unsubGoals) { unsubGoals(); unsubGoals = null; }
+    if (unsubSchedule) { unsubSchedule(); unsubSchedule = null; }
+    if (unsubChallenge) { unsubChallenge(); unsubChallenge = null; }
+    goalsDocs = {};
+    scheduleDocs = {};
+  }
+
+  function startListeners() {
+    clearListeners();
+
+    unsubGoals = onSnapshot(
+      collection(db, "goals"),
+      snapshot => {
+        const next = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          next[docSnap.id] = {
+            username: data.username || null,
+            goals: Array.isArray(data.goals) ? data.goals : []
+          };
+        });
+        goalsDocs = next;
+        setSyncStatus("✓ Leaderboard synced from Firebase.", "success");
+        render();
+      },
+      error => {
+        console.error("Leaderboard goals listener failed:", error);
+        if (error.code === "permission-denied") {
+          setSyncStatus(
+            "Can't load goals for the leaderboard: Firestore rules only allow each user to read their own 'goals' document. Add a rule that permits list/read access across the 'goals' collection (e.g. \"allow read: if request.auth != null;\") for the leaderboard to see everyone's data.",
+            "error"
+          );
+        } else {
+          setSyncStatus("Could not load goals for the leaderboard. Check Firestore rules.", "error");
+        }
+      }
+    );
+
+    unsubSchedule = onSnapshot(
+      collection(db, "users"),
+      snapshot => {
+        const next = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          next[docSnap.id] = {
+            username: data.username || null,
+            weeks: data.weeks || {}
+          };
+        });
+        scheduleDocs = next;
+        render();
+      },
+      error => {
+        console.error("Leaderboard schedule listener failed:", error);
+        if (error.code === "permission-denied") {
+          setSyncStatus(
+            "Can't load shifts for the leaderboard: Firestore rules only allow each user to read their own 'users' document. Add a rule permitting list/read access across the 'users' collection for the leaderboard to see everyone's data.",
+            "error"
+          );
+        } else {
+          setSyncStatus("Could not load schedules for the leaderboard. Check Firestore rules.", "error");
+        }
+      }
+    );
+
+    unsubChallenge = onSnapshot(
+      doc(db, "config", "communityChallenge"),
+      snapshot => {
+        if (snapshot.exists()) {
+          const cloud = snapshot.data();
+          challenge = {
+            title: cloud.title || challenge.title,
+            description: cloud.description || challenge.description,
+            targetHours: Number(cloud.targetHours) > 0 ? Number(cloud.targetHours) : challenge.targetHours,
+            endDate: cloud.endDate || challenge.endDate
+          };
+        }
+        updateSeasonCountdown();
+        renderCommunityGoal();
+      },
+      error => {
+        console.error("Community challenge listener failed:", error);
+        // Falls back to the defaults above — not fatal to the rest of the page.
+      }
+    );
+  }
+
+  function getMonday(offset = 0) {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = (day === 0 ? -6 : 1) - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday + offset * 7);
+    monday.setHours(0, 0, 0, 0);
+    return monday;
+  }
+
+  function weekKey(offset = 0) {
+    const monday = getMonday(offset);
+    return [
+      monday.getFullYear(),
+      String(monday.getMonth() + 1).padStart(2, "0"),
+      String(monday.getDate()).padStart(2, "0")
+    ].join("-");
+  }
+
+  function getShiftDate(weekStartKey, dayName) {
+    const dayOffset = DAY_OFFSETS[dayName];
+    if (dayOffset === undefined) return null;
+    const monday = new Date(`${weekStartKey}T00:00:00`);
+    if (Number.isNaN(monday.getTime())) return null;
+    monday.setDate(monday.getDate() + dayOffset);
+    return monday;
+  }
+
+  function formatDate(date) {
+    if (!date) return null;
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }
+
+  function displayName(uid, storedUsername) {
+    if (storedUsername) return storedUsername;
+    if (currentUser && uid === currentUser.uid) return emailToUsername(currentUser.email);
+    return "Anonymous";
+  }
+
+  function updateSeasonCountdown() {
+    const endDate = new Date(`${challenge.endDate}T23:59:59`);
+    const now = new Date();
+    const msLeft = endDate - now;
+    const daysLeft = Math.max(0, Math.ceil(msLeft / (1000 * 60 * 60 * 24)));
+
+    const labelEl = document.getElementById("seasonEndLabel");
+    const countdownEl = document.getElementById("seasonCountdown");
+
+    if (labelEl) {
+      labelEl.textContent = endDate.toLocaleDateString("en-US", {
+        month: "long", day: "numeric", year: "numeric"
+      });
+    }
+    if (countdownEl) {
+      countdownEl.innerHTML = daysLeft > 0
+        ? `<strong>${daysLeft}</strong> day${daysLeft === 1 ? "" : "s"} left`
+        : `Season closed`;
+    }
+  }
+
+  function renderCommunityGoal() {
+    let totalHours = 0;
+
+    Object.values(scheduleDocs).forEach(entry => {
+      const weeks = entry.weeks || {};
+      Object.values(weeks).forEach(shifts => {
+        if (!Array.isArray(shifts)) return;
+        shifts.forEach(shift => {
+          totalHours += Number(shift.hours) || 0;
+        });
+      });
+    });
+
+    const pct = Math.min(100, (totalHours / challenge.targetHours) * 100);
+
+    const titleEl = document.getElementById("communityTitle");
+    const pctEl = document.getElementById("communityPct");
+    const fillEl = document.getElementById("communityBarFill");
+    const subEl = document.getElementById("communitySub");
+
+    if (titleEl) titleEl.textContent = `🌍 ${challenge.title}`;
+    if (pctEl) pctEl.textContent = `${pct.toFixed(1)}%`;
+    if (fillEl) fillEl.style.width = `${pct}%`;
+    if (subEl) {
+      subEl.textContent = `${challenge.description} ${totalHours.toFixed(0)} of ${challenge.targetHours.toLocaleString()} hours logged together so far.`;
+    }
+  }
+
+  function buildGoalsLeaderboard() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+
+    const entries = [];
+
+    Object.entries(goalsDocs).forEach(([uid, entry]) => {
+      const upcoming = (entry.goals || [])
+        .filter(g => !g.done && g.targetDate)
+        .map(g => ({ goal: g, date: new Date(`${g.targetDate}T00:00:00`) }))
+        .filter(g => !Number.isNaN(g.date.getTime()) && g.date >= now)
+        .sort((a, b) => a.date - b.date);
+
+      if (!upcoming.length) return;
+
+      const nearest = upcoming[0];
+      const target = Number(nearest.goal.targetAmount) || 0;
+      const cur = Number(nearest.goal.currentAmount) || 0;
+      const pct = target > 0 ? Math.min(100, (cur / target) * 100) : 0;
+
+      entries.push({
+        uid,
+        name: displayName(uid, entry.username),
+        eventLabel: `${nearest.goal.name} · due ${formatDate(nearest.date)}`,
+        pct
+      });
+    });
+
+    return entries.sort((a, b) => b.pct - a.pct);
+  }
+
+  function buildHoursLeaderboard() {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const currentWeekKey = weekKey(0);
+
+    const entries = [];
+
+    Object.entries(scheduleDocs).forEach(([uid, entry]) => {
+      const weeks = entry.weeks || {};
+      const thisWeekShifts = Array.isArray(weeks[currentWeekKey]) ? weeks[currentWeekKey] : [];
+      const hours = thisWeekShifts.reduce((sum, s) => sum + (Number(s.hours) || 0), 0);
+
+      // find the next upcoming shift across all known weeks
+      let nextShift = null;
+      Object.entries(weeks).forEach(([wk, shifts]) => {
+        if (!Array.isArray(shifts)) return;
+        shifts.forEach(shift => {
+          const shiftDate = getShiftDate(wk, shift.day);
+          if (shiftDate && shiftDate >= now) {
+            if (!nextShift || shiftDate < nextShift.date) {
+              nextShift = { date: shiftDate, shift };
+            }
+          }
+        });
+      });
+
+      if (!hours && !nextShift) return;
+
+      const pct = Math.min(100, (hours / getHoursTarget()) * 100);
+
+      entries.push({
+        uid,
+        name: displayName(uid, entry.username),
+        eventLabel: nextShift
+          ? `${hours.toFixed(1)}h this week · next: ${escapeHtml(nextShift.shift.job || "shift")} ${formatDate(nextShift.date)}`
+          : `${hours.toFixed(1)}h scheduled this week`,
+        pct
+      });
+    });
+
+    return entries.sort((a, b) => b.pct - a.pct);
+  }
+
+  function render() {
+    renderCommunityGoal();
+
+    const searchInput = document.getElementById("searchFilter");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let entries = activeMetric === "goals" ? buildGoalsLeaderboard() : buildHoursLeaderboard();
+
+    if (query) {
+      entries = entries.filter(entry => entry.name.toLowerCase().includes(query));
+    }
+
+    entries = entries.slice(0, 10);
+
+    const listEl = document.getElementById("rankList");
+
+    if (!entries.length) {
+      const reason = query
+        ? `No participants match "${escapeHtml(query)}".`
+        : `No upcoming ${activeMetric === "goals" ? "goals with target dates" : "scheduled shifts"} found yet.
+           Add some on the ${activeMetric === "goals" ? "Goals" : "Schedule"} page to join the leaderboard.`;
+
+      listEl.innerHTML = `<div class="empty-state">${reason}</div>`;
+      return;
+    }
+
+    listEl.innerHTML = entries.map((entry, index) => {
+      const position = index + 1;
+      const isMe = currentUser && entry.uid === currentUser.uid;
+      return `
+        <div class="rank-row pos-${position} ${isMe ? "me" : ""}">
+          <div class="rank-badge">${position <= 3 ? ["🥇", "🥈", "🥉"][position - 1] : position}</div>
+          <div class="rank-body">
+            <div class="rank-top">
+              <div class="rank-name">
+                ${escapeHtml(entry.name)}
+                ${isMe ? `<span class="you-tag">YOU</span>` : ""}
+              </div>
+              <div class="rank-pct">${entry.pct.toFixed(0)}%</div>
+            </div>
+            <div class="rank-event">${entry.eventLabel}</div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width:${entry.pct}%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function setMetric(metric) {
+    activeMetric = metric;
+    document.getElementById("tabGoals").classList.toggle("active", metric === "goals");
+    document.getElementById("tabHours").classList.toggle("active", metric === "hours");
+    document.getElementById("hoursTargetWrap").style.display = metric === "hours" ? "block" : "none";
+    render();
+  }
+
+  async function handleAuth() {
+    const username = document.getElementById("authUsername").value.trim();
+    const password = document.getElementById("authPassword").value;
+    if (!username || !password) { showToast("Enter a username and password"); return; }
+    if (username.length < 3) { showToast("Username must be at least 3 characters"); return; }
+    const email = usernameToEmail(username);
+    try {
+      if (isSignUpMode) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast("Account created!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Welcome back!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const code = error.code || "";
+      let message = "Could not sign in.";
+      if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+        message = "Invalid username or password";
+      } else if (code === "auth/email-already-in-use") {
+        message = "Username already taken";
+      } else if (code === "auth/weak-password") {
+        message = "Password must be at least 6 characters";
+      }
+      showToast(message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      clearListeners();
+      await signOut(auth);
+      showToast("Logged out");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to log out");
+    }
+  }
+
+  function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+    const title = document.getElementById("authTitle");
+    const button = document.getElementById("authBtn");
+    const toggle = document.getElementById("authToggle");
+    if (isSignUpMode) {
+      title.textContent = "Create an account to join the leaderboard";
+      button.textContent = "Sign Up";
+      toggle.textContent = "Already have an account? Sign in";
+    } else {
+      title.textContent = "Sign in to see the leaderboard";
+      button.textContent = "Login";
+      toggle.textContent = "Don't have an account? Sign up";
+    }
+  }
+
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    const loggedOutForm = document.getElementById("loggedOutForm");
+    const loggedInView = document.getElementById("loggedInView");
+    const leaderboardContent = document.getElementById("leaderboardContent");
+    const userDisplay = document.getElementById("userDisplay");
+
+    if (user) {
+      loggedOutForm.style.display = "none";
+      loggedInView.style.display = "flex";
+      leaderboardContent.style.display = "block";
+      userDisplay.textContent = emailToUsername(user.email);
+      setSyncStatus("Loading leaderboard…");
+      startListeners();
+      return;
+    }
+
+    loggedOutForm.style.display = "block";
+    loggedInView.style.display = "none";
+    leaderboardContent.style.display = "none";
+    clearListeners();
+    setSyncStatus("Sign in to see how you rank against everyone else.");
+  });
+
+  window.handleAuth = handleAuth;
+  window.handleLogout = handleLogout;
+  window.toggleAuthMode = toggleAuthMode;
+  window.setMetric = setMetric;
+  window.render = render;
+
+  (async () => {
+    await checkStorage();
+    updateSeasonCountdown();
+    setInterval(updateSeasonCountdown, 60 * 60 * 1000);
+  })();
+</script>
+
+</body>
+</html>

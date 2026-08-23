@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admin</title>
+
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --card-hover: #21252e;
+    --accent: #ff8a3d;
+    --accent-soft: #3a2a1e;
+    --text: #eceef2;
+    --text-dim: #9aa0ab;
+    --border: #2a2e38;
+    --danger: #e5484d;
+    --success: #4ade80;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0 auto; max-width: 720px; padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--text);
+  }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  .subtitle { margin-bottom: 8px; color: var(--text-dim); font-size: 14px; }
+  .dashboard-link { display: inline-block; margin-bottom: 16px; color: var(--accent); font-size: 13px; text-decoration: none; }
+  .dashboard-link:hover { text-decoration: underline; }
+  .sync-status { min-height: 18px; margin-bottom: 14px; color: var(--text-dim); font-size: 12px; }
+  .sync-status.success { color: var(--success); }
+  .sync-status.error { color: #ff8a8f; }
+  .storage-warning {
+    display: none; margin-bottom: 16px; padding: 12px 14px;
+    border: 1px solid var(--danger); border-radius: 10px;
+    background: rgba(229, 72, 77, 0.15); color: #ff8a8f; font-size: 13px; line-height: 1.4;
+  }
+  .storage-warning.show { display: block; }
+  .card, .auth-card {
+    margin-bottom: 16px; padding: 16px; border: 1px solid var(--border);
+    border-radius: 12px; background: var(--card);
+  }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .form-row.full { grid-template-columns: 1fr; }
+  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 12px; }
+  input, select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+    outline: none; background: #12141a; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  textarea { resize: vertical; min-height: 60px; }
+  input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+  button {
+    width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
+    background: var(--accent); color: #1a1005; cursor: pointer; font-size: 14px; font-weight: 600;
+  }
+  button:hover { opacity: 0.9; }
+  button.secondary {
+    width: auto; border: 1px solid var(--border); background: transparent; color: var(--text-dim);
+  }
+  button.danger-btn {
+    width: auto; padding: 6px 12px; font-size: 12px;
+    background: transparent; border: 1px solid var(--danger); color: var(--danger);
+  }
+  .auth-header { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; font-weight: 600; }
+  .auth-link {
+    display: block; margin-top: 10px; color: var(--accent); cursor: pointer;
+    font-size: 12px; text-align: center; text-decoration: underline;
+  }
+  .auth-user-info { color: var(--text); font-size: 13px; }
+  .auth-user-info span { color: var(--accent); font-weight: 600; }
+
+  .badge {
+    display: inline-block; padding: 3px 9px; border-radius: 20px;
+    font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
+  }
+  .badge.admin { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+  .badge.uid { background: #12141a; color: var(--text-dim); font-weight: 500; font-family: monospace; }
+
+  .uid-hint {
+    padding: 12px 14px; border-radius: 10px; background: #12141a;
+    border: 1px solid var(--border); font-size: 12px; color: var(--text-dim); margin-bottom: 16px;
+  }
+  .uid-hint code {
+    display: block; margin-top: 6px; padding: 8px; border-radius: 6px;
+    background: #0b0d11; color: var(--accent); font-size: 12px; word-break: break-all;
+  }
+
+  .access-denied {
+    padding: 40px 16px; text-align: center; color: var(--text-dim);
+  }
+  .access-denied .big-icon { font-size: 36px; margin-bottom: 10px; }
+
+  .admin-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+  }
+  .admin-row:last-child { border-bottom: none; }
+  .admin-row-name { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+  .admin-row-name .name { font-weight: 700; }
+  .empty-state { padding: 20px 10px; color: var(--text-dim); font-size: 13px; text-align: center; }
+
+  .toast {
+    position: fixed; z-index: 9999; bottom: 20px; left: 50%; padding: 10px 18px;
+    border: 1px solid var(--accent); border-radius: 20px; background: var(--card);
+    font-size: 13px; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity 0.3s;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+</style>
+</head>
+
+<body>
+
+<h1>🛠️ Admin Panel</h1>
+<div class="subtitle">Manage admin access and the community challenge.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="sync-status" id="syncStatus">Checking cloud connection…</div>
+
+<div class="storage-warning" id="storageWarning">
+  ⚠️ <strong>Saving is not available on this device.</strong>
+  Use a normal browser tab instead of private/incognito mode.
+</div>
+
+<div class="auth-card">
+  <div id="loggedOutForm">
+    <div class="auth-header" id="authTitle">Sign in to manage the app</div>
+    <div class="form-row">
+      <div>
+        <label for="authUsername">Username</label>
+        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
+      </div>
+      <div>
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button id="authBtn" onclick="handleAuth()">Login</button>
+    </div>
+    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+  </div>
+  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
+    <div class="auth-user-info">Signed in: <span id="userDisplay"></span></div>
+    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">Logout</button>
+  </div>
+</div>
+
+<div id="checkingAccess" style="display:none;">
+  <div class="empty-state">Checking your access level…</div>
+</div>
+
+<div id="accessDenied" style="display:none;">
+  <div class="access-denied">
+    <div class="big-icon">🚫</div>
+    <div><strong>Admins only.</strong></div>
+    <div style="margin-top:6px;">Your account doesn't have admin access.<br>Ask an existing admin to grant it to you.</div>
+  </div>
+
+  <div class="uid-hint">
+    Share this UID with an existing admin so they can grant you access from this same page:
+    <code id="yourUid">—</code>
+  </div>
+</div>
+
+<div id="adminContent" style="display:none;">
+
+  <div class="uid-hint">
+    Bootstrapping the very first admin has to be done manually in the Firebase console
+    (Firestore → <code>roles</code> collection → new document with this ID and field <code>admin: true</code>):
+    <code id="yourUidInline">—</code>
+  </div>
+
+  <div class="card">
+    <h2>🌍 Community Challenge</h2>
+    <div class="form-row full">
+      <div>
+        <label for="challengeTitle">Challenge title</label>
+        <input id="challengeTitle" type="text" placeholder="e.g. Work 10,000 Hours Together">
+      </div>
+    </div>
+    <div class="form-row full">
+      <div>
+        <label for="challengeDescription">Description</label>
+        <textarea id="challengeDescription" placeholder="A short line shown under the progress bar."></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label for="challengeTargetHours">Target hours</label>
+        <input id="challengeTargetHours" type="number" min="1" step="1" placeholder="e.g. 10000">
+      </div>
+      <div>
+        <label for="challengeEndDate">End date</label>
+        <input id="challengeEndDate" type="date">
+      </div>
+    </div>
+    <button onclick="saveChallenge()">Save Challenge</button>
+  </div>
+
+  <div class="card">
+    <h2>👑 Current Admins</h2>
+    <div id="adminList"></div>
+  </div>
+
+  <div class="card">
+    <h2>➕ Grant / Revoke Admin</h2>
+    <div class="form-row">
+      <div>
+        <label for="grantUsername">Username</label>
+        <input id="grantUsername" type="text" placeholder="e.g. benjamin">
+      </div>
+    </div>
+    <div class="form-row">
+      <button onclick="grantAdmin()">Grant Admin</button>
+      <button class="secondary" onclick="revokeAdminByUsername()">Revoke Admin</button>
+    </div>
+    <div class="empty-state" style="padding-top:10px;">
+      Looks up the username in saved Goals or Schedule data, so that person needs
+      to have signed in and saved something at least once before you can find them here.
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+  import {
+    getAuth,
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    getFirestore,
+    collection,
+    doc,
+    getDoc,
+    setDoc,
+    deleteDoc,
+    onSnapshot,
+    query,
+    where,
+    getDocs
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
+    authDomain: "scheduler-609b0.firebaseapp.com",
+    projectId: "scheduler-609b0",
+    storageBucket: "scheduler-609b0.firebasestorage.app",
+    messagingSenderId: "151764758872",
+    appId: "1:151764758872:web:4382212aaa6e870395b52d",
+    measurementId: "G-MX8DN7YLB2"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  try { getAnalytics(app); } catch (e) { console.warn("Analytics bypassed.", e); }
+
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+
+  let currentUser = null;
+  let isSignUpMode = false;
+  let storageWorking = true;
+  let isAdmin = false;
+
+  // Bootstrap admin: hardcoded so there's always at least one account that
+  // can grant roles/{uid} docs to everyone else. Remove once real admin
+  // docs exist and this is no longer needed.
+  const HARDCODED_ADMIN_USERNAME = "justin";
+
+  let unsubRoles = null;
+  let adminUids = new Set();
+  let usernameMap = {}; // uid -> username, resolved from goals/users collections
+
+  function usernameToEmail(username) {
+    const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
+    return `${clean}@scheduler.app`;
+  }
+  function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  function setSyncStatus(message, type = "") {
+    const status = document.getElementById("syncStatus");
+    status.textContent = message;
+    status.className = `sync-status ${type}`;
+  }
+
+  function showToast(message) {
+    const toast = document.getElementById("toast");
+    toast.textContent = message;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2000);
+  }
+
+  async function checkStorage() {
+    const warning = document.getElementById("storageWarning");
+    try {
+      localStorage.setItem("__admin_probe__", "ok");
+      const check = localStorage.getItem("__admin_probe__");
+      localStorage.removeItem("__admin_probe__");
+      storageWorking = check === "ok";
+      if (!storageWorking) warning.classList.add("show");
+    } catch (e) {
+      storageWorking = false;
+      warning.classList.add("show");
+    }
+  }
+
+  function clearListeners() {
+    if (unsubRoles) { unsubRoles(); unsubRoles = null; }
+    adminUids = new Set();
+    usernameMap = {};
+  }
+
+  async function resolveUsernameMap() {
+    // Best-effort lookup of uid -> username from goals + schedule docs,
+    // so the admin list can show names instead of raw UIDs.
+    const map = {};
+    try {
+      const goalsSnap = await getDocs(collection(db, "goals"));
+      goalsSnap.forEach(d => {
+        const data = d.data();
+        if (data.username) map[d.id] = data.username;
+      });
+    } catch (e) {
+      console.warn("Could not resolve usernames from goals collection.", e);
+    }
+    try {
+      const usersSnap = await getDocs(collection(db, "users"));
+      usersSnap.forEach(d => {
+        const data = d.data();
+        if (data.username && !map[d.id]) map[d.id] = data.username;
+      });
+    } catch (e) {
+      console.warn("Could not resolve usernames from users collection.", e);
+    }
+    if (currentUser && !map[currentUser.uid]) {
+      map[currentUser.uid] = emailToUsername(currentUser.email);
+    }
+    usernameMap = map;
+  }
+
+  async function findUidByUsername(username) {
+    const clean = username.trim().toLowerCase();
+    if (!clean) return null;
+
+    if (currentUser && emailToUsername(currentUser.email).toLowerCase() === clean) {
+      return currentUser.uid;
+    }
+
+    try {
+      const q1 = query(collection(db, "goals"), where("username", "==", clean));
+      const snap1 = await getDocs(q1);
+      if (!snap1.empty) return snap1.docs[0].id;
+    } catch (e) {
+      console.warn("Username lookup in goals failed.", e);
+    }
+
+    try {
+      const q2 = query(collection(db, "users"), where("username", "==", clean));
+      const snap2 = await getDocs(q2);
+      if (!snap2.empty) return snap2.docs[0].id;
+    } catch (e) {
+      console.warn("Username lookup in users failed.", e);
+    }
+
+    return null;
+  }
+
+  function renderAdminList() {
+    const listEl = document.getElementById("adminList");
+    if (!adminUids.size) {
+      listEl.innerHTML = `<div class="empty-state">No admins found yet.</div>`;
+      return;
+    }
+
+    listEl.innerHTML = [...adminUids].map(uid => {
+      const name = usernameMap[uid] || null;
+      const isSelf = currentUser && uid === currentUser.uid;
+      return `
+        <div class="admin-row">
+          <div class="admin-row-name">
+            <div class="name">${name ? escapeHtml(name) : "Unknown user"} ${isSelf ? "(you)" : ""}</div>
+            <span class="badge uid">${uid}</span>
+          </div>
+          <button class="danger-btn" ${isSelf ? "disabled title=\"You can't revoke your own access\"" : ""} onclick="revokeAdminByUid('${uid}')">Revoke</button>
+        </div>
+      `;
+    }).join("");
+  }
+
+  async function loadChallengeForm() {
+    try {
+      const snap = await getDoc(doc(db, "config", "communityChallenge"));
+      const data = snap.exists() ? snap.data() : {};
+      document.getElementById("challengeTitle").value =
+        data.title || "Community Challenge: 10,000 Hours Together";
+      document.getElementById("challengeDescription").value =
+        data.description || "Every logged shift counts toward the team total.";
+      document.getElementById("challengeTargetHours").value =
+        data.targetHours || 10000;
+      document.getElementById("challengeEndDate").value =
+        data.endDate || "2026-12-31";
+    } catch (e) {
+      console.error("Could not load community challenge config.", e);
+      showToast("Could not load the current challenge settings");
+    }
+  }
+
+  async function saveChallenge() {
+    const title = document.getElementById("challengeTitle").value.trim();
+    const description = document.getElementById("challengeDescription").value.trim();
+    const targetHours = parseFloat(document.getElementById("challengeTargetHours").value);
+    const endDate = document.getElementById("challengeEndDate").value;
+
+    if (!title || isNaN(targetHours) || targetHours <= 0 || !endDate) {
+      showToast("Fill in a title, a valid target, and an end date");
+      return;
+    }
+
+    try {
+      await setDoc(doc(db, "config", "communityChallenge"), {
+        title,
+        description,
+        targetHours,
+        endDate,
+        updatedAt: Date.now(),
+        updatedBy: currentUser ? currentUser.uid : null
+      });
+      showToast("Challenge saved ✓");
+    } catch (e) {
+      console.error("Could not save community challenge.", e);
+      showToast("Save failed — check Firestore rules");
+    }
+  }
+
+  async function grantAdmin() {
+    const username = document.getElementById("grantUsername").value.trim();
+    if (!username) { showToast("Enter a username"); return; }
+
+    const uid = await findUidByUsername(username);
+    if (!uid) {
+      showToast("No user found with that username yet");
+      return;
+    }
+
+    try {
+      await setDoc(doc(db, "roles", uid), {
+        admin: true,
+        updatedAt: Date.now(),
+        grantedBy: currentUser.uid
+      }, { merge: true });
+      await resolveUsernameMap();
+      renderAdminList();
+      showToast(`Granted admin to ${username} ✓`);
+      document.getElementById("grantUsername").value = "";
+    } catch (e) {
+      console.error("Could not grant admin.", e);
+      showToast("Could not grant admin — check Firestore rules");
+    }
+  }
+
+  async function revokeAdminByUsername() {
+    const username = document.getElementById("grantUsername").value.trim();
+    if (!username) { showToast("Enter a username"); return; }
+
+    const uid = await findUidByUsername(username);
+    if (!uid) {
+      showToast("No user found with that username yet");
+      return;
+    }
+
+    await revokeAdminByUid(uid);
+  }
+
+  async function revokeAdminByUid(uid) {
+    if (currentUser && uid === currentUser.uid) {
+      showToast("You can't revoke your own admin access from here");
+      return;
+    }
+    try {
+      await deleteDoc(doc(db, "roles", uid));
+      showToast("Admin access revoked ✓");
+    } catch (e) {
+      console.error("Could not revoke admin.", e);
+      showToast("Could not revoke admin — check Firestore rules");
+    }
+  }
+
+  function startRolesListener() {
+    if (unsubRoles) { unsubRoles(); unsubRoles = null; }
+    unsubRoles = onSnapshot(
+      collection(db, "roles"),
+      async snapshot => {
+        const next = new Set();
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.admin === true) next.add(docSnap.id);
+        });
+        if (
+          currentUser &&
+          emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME
+        ) {
+          next.add(currentUser.uid);
+        }
+        adminUids = next;
+        await resolveUsernameMap();
+        renderAdminList();
+      },
+      error => {
+        console.error("Roles listener failed.", error);
+        setSyncStatus("Could not load admin list. Check Firestore rules for the 'roles' collection.", "error");
+      }
+    );
+  }
+
+  async function checkAccessAndInit() {
+    if (!currentUser) return;
+
+    document.getElementById("checkingAccess").style.display = "block";
+    document.getElementById("accessDenied").style.display = "none";
+    document.getElementById("adminContent").style.display = "none";
+
+    try {
+      const isHardcodedAdmin =
+        emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME;
+      const roleSnap = await getDoc(doc(db, "roles", currentUser.uid));
+      isAdmin = isHardcodedAdmin || (roleSnap.exists() && roleSnap.data().admin === true);
+    } catch (e) {
+      console.error("Could not check admin role.", e);
+      isAdmin = emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME;
+    }
+
+    document.getElementById("checkingAccess").style.display = "none";
+    document.getElementById("yourUid").textContent = currentUser.uid;
+    document.getElementById("yourUidInline").textContent = currentUser.uid;
+
+    if (!isAdmin) {
+      document.getElementById("accessDenied").style.display = "block";
+      setSyncStatus("Signed in — admin access required to manage settings.");
+      return;
+    }
+
+    document.getElementById("adminContent").style.display = "block";
+    setSyncStatus("✓ Admin access confirmed.", "success");
+
+    await loadChallengeForm();
+    startRolesListener();
+  }
+
+  async function handleAuth() {
+    const username = document.getElementById("authUsername").value.trim();
+    const password = document.getElementById("authPassword").value;
+    if (!username || !password) { showToast("Enter a username and password"); return; }
+    if (username.length < 3) { showToast("Username must be at least 3 characters"); return; }
+    const email = usernameToEmail(username);
+    try {
+      if (isSignUpMode) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast("Account created!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Welcome back!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const code = error.code || "";
+      let message = "Could not sign in.";
+      if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+        message = "Invalid username or password";
+      } else if (code === "auth/email-already-in-use") {
+        message = "Username already taken";
+      } else if (code === "auth/weak-password") {
+        message = "Password must be at least 6 characters";
+      }
+      showToast(message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      clearListeners();
+      await signOut(auth);
+      showToast("Logged out");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to log out");
+    }
+  }
+
+  function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+    const title = document.getElementById("authTitle");
+    const button = document.getElementById("authBtn");
+    const toggle = document.getElementById("authToggle");
+    if (isSignUpMode) {
+      title.textContent = "Create an account";
+      button.textContent = "Sign Up";
+      toggle.textContent = "Already have an account? Sign in";
+    } else {
+      title.textContent = "Sign in to manage the app";
+      button.textContent = "Login";
+      toggle.textContent = "Don't have an account? Sign up";
+    }
+  }
+
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    const loggedOutForm = document.getElementById("loggedOutForm");
+    const loggedInView = document.getElementById("loggedInView");
+    const userDisplay = document.getElementById("userDisplay");
+
+    clearListeners();
+
+    if (user) {
+      loggedOutForm.style.display = "none";
+      loggedInView.style.display = "flex";
+      userDisplay.textContent = emailToUsername(user.email);
+      checkAccessAndInit();
+      return;
+    }
+
+    loggedOutForm.style.display = "block";
+    loggedInView.style.display = "none";
+    document.getElementById("checkingAccess").style.display = "none";
+    document.getElementById("accessDenied").style.display = "none";
+    document.getElementById("adminContent").style.display = "none";
+    setSyncStatus("Sign in to manage admin access and the community challenge.");
+  });
+
+  window.handleAuth = handleAuth;
+  window.handleLogout = handleLogout;
+  window.toggleAuthMode = toggleAuthMode;
+  window.saveChallenge = saveChallenge;
+  window.grantAdmin = grantAdmin;
+  window.revokeAdminByUsername = revokeAdminByUsername;
+  window.revokeAdminByUid = revokeAdminByUid;
+
+  (async () => {
+    await checkStorage();
+  })();
+</script>
+
+</body>
+</html>

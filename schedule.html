@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Weekly Schedule Tracker</title>
+
+<style>
+  :root {
+    --bg: #0f1115;
+    --card: #1a1d24;
+    --card-hover: #21252e;
+    --accent: #ff8a3d;
+    --accent-soft: #3a2a1e;
+    --text: #eceef2;
+    --text-dim: #9aa0ab;
+    --border: #2a2e38;
+    --danger: #e5484d;
+    --success: #4ade80;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0 auto;
+    max-width: 720px;
+    padding: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+
+  h1 { margin: 0 0 4px; font-size: 22px; }
+
+  .subtitle {
+    margin-bottom: 8px;
+    color: var(--text-dim);
+    font-size: 14px;
+  }
+
+  .dashboard-link {
+    display: inline-block;
+    margin-bottom: 10px;
+    color: var(--accent);
+    font-size: 13px;
+    text-decoration: none;
+  }
+
+  .dashboard-link:hover { text-decoration: underline; }
+
+  .sync-status {
+    min-height: 18px;
+    margin-bottom: 14px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  .sync-status.success { color: var(--success); }
+  .sync-status.error { color: #ff8a8f; }
+
+  .storage-warning {
+    display: none;
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border: 1px solid var(--danger);
+    border-radius: 10px;
+    background: rgba(229,72,77,0.15);
+    color: #ff8a8f;
+    font-size: 13px;
+  }
+
+  .storage-warning.show { display: block; }
+
+  .card, .auth-card {
+    margin-bottom: 16px;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--card);
+  }
+
+  .form-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+
+  label {
+    display: block;
+    margin-bottom: 4px;
+    color: var(--text-dim);
+    font-size: 12px;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    outline: none;
+    background: #12141a;
+    color: var(--text);
+    font-size: 14px;
+  }
+
+  input:focus, select:focus { border-color: var(--accent); }
+
+  button {
+    width: 100%;
+    padding: 10px 16px;
+    border: none;
+    border-radius: 8px;
+    background: var(--accent);
+    color: #1a1005;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  button:hover { opacity: .9; }
+
+  button.secondary {
+    width: auto;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-dim);
+  }
+
+  button.active {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: #1a1005;
+  }
+
+  .auth-header {
+    margin-bottom: 12px;
+    color: var(--text-dim);
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  .auth-link {
+    display: block;
+    margin-top: 10px;
+    color: var(--accent);
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+    text-decoration: underline;
+  }
+
+  .auth-user-info { font-size: 13px; }
+  .auth-user-info span { color: var(--accent); font-weight: 600; }
+
+  .view-nav, .week-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .view-nav { justify-content: flex-start; }
+  .week-label { font-size: 14px; font-weight: 700; text-align: center; }
+
+  .summary-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .stat {
+    padding: 12px;
+    border-radius: 8px;
+    background: #12141a;
+    text-align: center;
+  }
+
+  .stat-value { color: var(--accent); font-size: 20px; font-weight: 700; }
+  .stat-label { margin-top: 2px; color: var(--text-dim); font-size: 11px; }
+
+  .shift {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+    padding: 10px 12px;
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: #12141a;
+  }
+
+  .shift-info { min-width: 0; flex: 1; font-size: 14px; }
+  .shift-day { font-weight: 600; }
+  .shift-job { color: var(--text-dim); font-size: 12px; }
+  .shift-hours { margin-left: 8px; color: var(--success); font-size: 13px; }
+
+  .del-btn {
+    width: auto;
+    padding: 4px 8px;
+    background: none;
+    color: var(--danger);
+    font-size: 17px;
+  }
+
+  .day-group { margin-bottom: 14px; }
+
+  .day-header {
+    margin-bottom: 6px;
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+
+  .week-overview-card { margin-bottom: 12px; }
+
+  .week-overview-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+
+  .week-overview-title { font-size: 15px; font-weight: 700; }
+  .week-overview-stats { color: var(--text-dim); font-size: 12px; }
+
+  .mini-day-row, .insight-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .mini-day-row:last-child, .insight-row:last-child { border-bottom: none; }
+
+  .mini-day-name, .insight-row-label { color: var(--text-dim); }
+  .mini-day-shifts, .insight-row-value { text-align: right; font-weight: 600; }
+
+  .insight-title {
+    margin-bottom: 10px;
+    color: var(--text-dim);
+    font-size: 13px;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+  }
+
+  .insight-big {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .insight-value { color: var(--accent); font-size: 26px; font-weight: 700; }
+  .insight-sub { color: var(--text-dim); font-size: 12px; }
+
+  .empty-state {
+    padding: 30px 10px;
+    color: var(--text-dim);
+    font-size: 14px;
+    text-align: center;
+  }
+
+  .toast {
+    position: fixed;
+    z-index: 9999;
+    bottom: 20px;
+    left: 50%;
+    padding: 10px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 20px;
+    background: var(--card);
+    font-size: 13px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-50%);
+    transition: opacity .3s;
+  }
+
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 520px) {
+    .form-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+
+<body>
+
+<h1>📅 Weekly Schedule</h1>
+<div class="subtitle">Log your shifts, track hours, and pay across jobs.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="sync-status" id="syncStatus">Checking cloud connection…</div>
+
+<div class="storage-warning" id="storageWarning">
+  ⚠️ <strong>Saving is not available on this device.</strong>
+  Use a normal browser tab instead of private/incognito mode.
+</div>
+
+<div class="auth-card">
+  <div id="loggedOutForm">
+    <div class="auth-header" id="authTitle">Sign in to sync your schedule</div>
+
+    <div class="form-row">
+      <div>
+        <label for="authUsername">Username</label>
+        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
+      </div>
+
+      <div>
+        <label for="authPassword">Password</label>
+        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+      </div>
+    </div>
+
+    <div style="margin-top:12px;">
+      <button id="authBtn" onclick="handleAuth()">Login</button>
+    </div>
+
+    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
+      Don't have an account? Sign up
+    </span>
+  </div>
+
+  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
+    <div class="auth-user-info">
+      Cloud synced: <span id="userDisplay"></span>
+    </div>
+
+    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">
+      Logout
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="view-nav">
+    <button class="secondary active" id="btnSingleView" onclick="setView('single')">Single Week</button>
+    <button class="secondary" id="btnAllView" onclick="setView('all')">All Weeks</button>
+    <button class="secondary" id="btnInsightsView" onclick="setView('insights')">Insights</button>
+  </div>
+</div>
+
+<div id="singleView">
+  <div class="card">
+    <div class="week-nav">
+      <button class="secondary" onclick="changeWeek(-1)">← Prev</button>
+      <div class="week-label" id="weekLabel"></div>
+      <button class="secondary" onclick="changeWeek(1)">Next →</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="form-row">
+      <div>
+        <label for="day">Day</label>
+        <select id="day">
+          <option>Monday</option>
+          <option>Tuesday</option>
+          <option>Wednesday</option>
+          <option>Thursday</option>
+          <option>Friday</option>
+          <option>Saturday</option>
+          <option>Sunday</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="job">Job</label>
+        <input id="job" list="jobList" placeholder="e.g. Olive Garden">
+        <datalist id="jobList"></datalist>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="start">Start time</label>
+        <input id="start" type="time" value="16:30">
+      </div>
+
+      <div>
+        <label for="end">End time</label>
+        <input id="end" type="time" value="22:00">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="rate">Hourly pay (optional)</label>
+        <input id="rate" type="number" min="0.01" step="0.25" placeholder="e.g. 12.00">
+      </div>
+      <div></div>
+    </div>
+
+    <button onclick="addShift()">+ Add Shift</button>
+  </div>
+
+  <div class="card">
+    <div class="summary-grid" id="summary"></div>
+  </div>
+
+  <div class="card" id="shiftList"></div>
+</div>
+
+<div id="allWeeksView" style="display:none;"></div>
+<div id="insightsView" style="display:none;"></div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  onSnapshot
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
+  authDomain: "scheduler-609b0.firebaseapp.com",
+  projectId: "scheduler-609b0",
+  storageBucket: "scheduler-609b0.firebasestorage.app",
+  messagingSenderId: "151764758872",
+  appId: "1:151764758872:web:4382212aaa6e870395b52d",
+  measurementId: "G-MX8DN7YLB2"
+};
+
+const app = initializeApp(firebaseConfig);
+
+try {
+  getAnalytics(app);
+} catch (error) {
+  console.warn("Analytics bypassed for local environment.", error);
+}
+
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const STORAGE_KEY = "benjamin-schedule-tracker-data";
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+let currentUser = null;
+let unsubscribeSchedule = null;
+let currentWeekOffset = 0;
+let currentView = "single";
+let isSignUpMode = false;
+let storageWorking = true;
+
+let data = {
+  weeks: {},
+  jobRates: {}
+};
+
+function usernameToEmail(username) {
+  return `${username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "")}@scheduler.app`;
+}
+
+function emailToUsername(email) {
+  return email ? email.split("@")[0] : "";
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function showToast(message) {
+  const toast = document.getElementById("toast");
+  toast.textContent = message;
+  toast.classList.add("show");
+  setTimeout(() => toast.classList.remove("show"), 1800);
+}
+
+function setSyncStatus(message, type = "") {
+  const status = document.getElementById("syncStatus");
+  status.textContent = message;
+  status.className = `sync-status ${type}`;
+}
+
+async function checkStorage() {
+  try {
+    localStorage.setItem("__schedule_probe__", "ok");
+    storageWorking = localStorage.getItem("__schedule_probe__") === "ok";
+    localStorage.removeItem("__schedule_probe__");
+  } catch {
+    storageWorking = false;
+  }
+
+  if (!storageWorking) {
+    document.getElementById("storageWarning").classList.add("show");
+  }
+}
+
+function loadLocalData() {
+  if (!storageWorking) return;
+
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      data = {
+        weeks: parsed.weeks || {},
+        jobRates: parsed.jobRates || {}
+      };
+    }
+  } catch (error) {
+    console.warn("Could not load local schedule.", error);
+  }
+}
+
+function saveLocalData() {
+  if (!storageWorking) return;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  } catch (error) {
+    console.warn("Could not save schedule locally.", error);
+  }
+}
+
+function getMonday(offset = 0) {
+  const now = new Date();
+  const day = now.getDay();
+  const monday = new Date(now);
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+
+  monday.setDate(now.getDate() + diffToMonday + offset * 7);
+  monday.setHours(0, 0, 0, 0);
+
+  return monday;
+}
+
+function weekKey(offset = 0) {
+  const monday = getMonday(offset);
+
+  return [
+    monday.getFullYear(),
+    String(monday.getMonth() + 1).padStart(2, "0"),
+    String(monday.getDate()).padStart(2, "0")
+  ].join("-");
+}
+
+function formatWeekLabel(offset = 0) {
+  const start = getMonday(offset);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+
+  const format = date => date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  });
+
+  return offset === 0
+    ? `This Week (${format(start)} – ${format(end)})`
+    : `${format(start)} – ${format(end)}`;
+}
+
+function hoursBetween(start, end) {
+  const [startHour, startMinute] = start.split(":").map(Number);
+  const [endHour, endMinute] = end.split(":").map(Number);
+
+  let minutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+
+  if (minutes < 0) minutes += 24 * 60;
+
+  return minutes / 60;
+}
+
+function formatTime(time) {
+  const [hour, minute] = time.split(":").map(Number);
+  const period = hour >= 12 ? "PM" : "AM";
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+
+  return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
+}
+
+async function saveCloudData() {
+  if (!currentUser) {
+    setSyncStatus("Saved on this device. Sign in to sync your schedule.");
+    return true;
+  }
+
+  try {
+    setSyncStatus("Saving schedule to cloud…");
+
+    await setDoc(doc(db, "users", currentUser.uid), {
+      weeks: data.weeks || {},
+      jobRates: data.jobRates || {},
+      username: emailToUsername(currentUser.email),
+      updatedAt: Date.now()
+    });
+
+    setSyncStatus("✓ Schedule saved and synced to Firebase.", "success");
+    return true;
+  } catch (error) {
+    console.error("Schedule cloud save failed:", error);
+    setSyncStatus("Cloud save failed. Your schedule remains saved locally.", "error");
+    return false;
+  }
+}
+
+function startScheduleListener() {
+  if (!currentUser) return;
+
+  if (unsubscribeSchedule) unsubscribeSchedule();
+
+  unsubscribeSchedule = onSnapshot(
+    doc(db, "users", currentUser.uid),
+    async snapshot => {
+      if (snapshot.exists()) {
+        const cloud = snapshot.data();
+
+        data = {
+          weeks: cloud.weeks || {},
+          jobRates: cloud.jobRates || {}
+        };
+
+        saveLocalData();
+        setSyncStatus("✓ Schedule loaded from Firebase.", "success");
+      } else if (Object.keys(data.weeks || {}).length > 0) {
+        await saveCloudData();
+      } else {
+        setSyncStatus("Ready to save shifts to Firebase.", "success");
+      }
+
+      render();
+    },
+    error => {
+      console.error("Schedule listener failed:", error);
+      setSyncStatus("Firebase cannot load schedule. Check Firestore rules.", "error");
+    }
+  );
+}
+
+async function addShift() {
+  const day = document.getElementById("day").value;
+  const job = document.getElementById("job").value.trim();
+  const start = document.getElementById("start").value;
+  const end = document.getElementById("end").value;
+  const rateInput = document.getElementById("rate").value;
+
+  if (!job || !start || !end) {
+    showToast("Fill in job and times");
+    return;
+  }
+
+  const enteredRate = rateInput ? Number.parseFloat(rateInput) : null;
+
+  if (rateInput && (!Number.isFinite(enteredRate) || enteredRate <= 0)) {
+    showToast("Enter a valid hourly pay rate");
+    return;
+  }
+
+  const rate = enteredRate ?? data.jobRates[job] ?? null;
+  const key = weekKey(currentWeekOffset);
+
+  if (!data.weeks[key]) data.weeks[key] = [];
+  if (rate) data.jobRates[job] = rate;
+
+  data.weeks[key].push({
+    id: Date.now(),
+    day,
+    job,
+    start,
+    end,
+    hours: hoursBetween(start, end),
+    rate
+  });
+
+  saveLocalData();
+  render();
+
+  document.getElementById("job").value = "";
+  document.getElementById("rate").value = "";
+
+  const saved = await saveCloudData();
+  showToast(saved ? "Shift added and saved ✓" : "Shift added locally, cloud save failed");
+}
+
+async function deleteShift(id) {
+  const key = weekKey(currentWeekOffset);
+
+  if (!data.weeks[key]) return;
+
+  data.weeks[key] = data.weeks[key].filter(shift => shift.id !== id);
+
+  if (!data.weeks[key].length) delete data.weeks[key];
+
+  saveLocalData();
+  render();
+
+  const saved = await saveCloudData();
+  showToast(saved ? "Shift deleted and cloud updated ✓" : "Deleted locally, cloud update failed");
+}
+
+function changeWeek(delta) {
+  currentWeekOffset += delta;
+  render();
+}
+
+function setView(view) {
+  currentView = view;
+
+  document.getElementById("singleView").style.display = view === "single" ? "block" : "none";
+  document.getElementById("allWeeksView").style.display = view === "all" ? "block" : "none";
+  document.getElementById("insightsView").style.display = view === "insights" ? "block" : "none";
+
+  document.getElementById("btnSingleView").classList.toggle("active", view === "single");
+  document.getElementById("btnAllView").classList.toggle("active", view === "all");
+  document.getElementById("btnInsightsView").classList.toggle("active", view === "insights");
+
+  render();
+}
+
+function offsetForKey(key) {
+  const target = new Date(`${key}T00:00:00`);
+  const currentMonday = getMonday(0);
+  return Math.round((target - currentMonday) / (7 * 24 * 60 * 60 * 1000));
+}
+
+function jumpToWeek(offset) {
+  currentWeekOffset = offset;
+  setView("single");
+}
+
+function renderAllWeeks() {
+  const container = document.getElementById("allWeeksView");
+
+  const keys = Object.keys(data.weeks || {})
+    .filter(key => data.weeks[key]?.length)
+    .sort((a, b) => b.localeCompare(a));
+
+  if (!keys.length) {
+    container.innerHTML = `<div class="card"><div class="empty-state">No weeks scheduled yet. Add a shift to get started.</div></div>`;
+    return;
+  }
+
+  container.innerHTML = keys.map(key => {
+    const shifts = [...data.weeks[key]].sort((a, b) =>
+      DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start)
+    );
+
+    const hours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
+    const pay = shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0);
+
+    const rows = DAYS.map(day => {
+      const dayShifts = shifts.filter(shift => shift.day === day);
+      if (!dayShifts.length) return "";
+
+      return `
+        <div class="mini-day-row">
+          <div class="mini-day-name">${day}</div>
+          <div class="mini-day-shifts">
+            ${dayShifts.map(shift => `${escapeHtml(shift.job)} ${formatTime(shift.start)}–${formatTime(shift.end)}`).join(", ")}
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="card week-overview-card">
+        <div class="week-overview-header">
+          <div class="week-overview-title">${formatWeekLabel(offsetForKey(key))}</div>
+          <div class="week-overview-stats">${hours.toFixed(1)}h${pay ? ` · $${pay.toFixed(2)}` : ""}</div>
+        </div>
+        ${rows}
+        <button class="secondary" style="margin-top:10px;" onclick="jumpToWeek(${offsetForKey(key)})">Edit this week →</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function renderInsights() {
+  const container = document.getElementById("insightsView");
+
+  const weeks = Object.entries(data.weeks || {})
+    .filter(([, shifts]) => shifts?.length)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, shifts]) => ({
+      key,
+      shifts,
+      hours: shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0),
+      pay: shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0)
+    }));
+
+  if (weeks.length < 2) {
+    container.innerHTML = `<div class="card"><div class="empty-state">Log at least 2 weeks of shifts to see schedule insights.</div></div>`;
+    return;
+  }
+
+  const averageHours = weeks.reduce((sum, week) => sum + week.hours, 0) / weeks.length;
+  const averagePay = weeks.reduce((sum, week) => sum + week.pay, 0) / weeks.length;
+  const highest = weeks.reduce((a, b) => b.hours > a.hours ? b : a);
+  const lowest = weeks.reduce((a, b) => b.hours < a.hours ? b : a);
+
+  const dayHours = Object.fromEntries(DAYS.map(day => [day, 0]));
+  const jobHours = {};
+
+  weeks.forEach(week => week.shifts.forEach(shift => {
+    dayHours[shift.day] += Number(shift.hours) || 0;
+    jobHours[shift.job] = (jobHours[shift.job] || 0) + (Number(shift.hours) || 0);
+  }));
+
+  const busiestDay = Object.entries(dayHours).sort((a, b) => b[1] - a[1])[0][0];
+  const jobs = Object.entries(jobHours).sort((a, b) => b[1] - a[1]);
+
+  container.innerHTML = `
+    <div class="card">
+      <div class="insight-title">Hours Trend</div>
+      <div class="insight-big"><div class="insight-value">${averageHours.toFixed(1)}h</div></div>
+      <div class="insight-sub">Average hours per week across ${weeks.length} logged weeks</div>
+    </div>
+
+    <div class="card">
+      <div class="insight-title">Patterns</div>
+      <div class="insight-row">
+        <div class="insight-row-label">Busiest day</div>
+        <div class="insight-row-value">${busiestDay}</div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-row-label">Average weekly pay</div>
+        <div class="insight-row-value">${averagePay ? `$${averagePay.toFixed(2)}` : "—"}</div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-row-label">Highest hours week</div>
+        <div class="insight-row-value">${highest.hours.toFixed(1)}h</div>
+      </div>
+      <div class="insight-row">
+        <div class="insight-row-label">Lowest hours week</div>
+        <div class="insight-row-value">${lowest.hours.toFixed(1)}h</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="insight-title">Time Split by Job</div>
+      ${jobs.map(([job, hours]) => `
+        <div class="insight-row">
+          <div class="insight-row-label">${escapeHtml(job)}</div>
+          <div class="insight-row-value">${hours.toFixed(1)}h</div>
+        </div>
+      `).join("")}
+    </div>
+  `;
+}
+
+function renderSingleWeek() {
+  document.getElementById("weekLabel").textContent = formatWeekLabel(currentWeekOffset);
+
+  const key = weekKey(currentWeekOffset);
+  const shifts = [...(data.weeks[key] || [])].sort((a, b) =>
+    DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start)
+  );
+
+  document.getElementById("jobList").innerHTML = Object.keys(data.jobRates || {})
+    .map(job => `<option value="${escapeHtml(job)}">`)
+    .join("");
+
+  const totalHours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
+  const totalPay = shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0);
+  const jobs = new Set(shifts.map(shift => shift.job).filter(Boolean));
+
+  document.getElementById("summary").innerHTML = `
+    <div class="stat"><div class="stat-value">${totalHours.toFixed(1)}</div><div class="stat-label">Total Hours</div></div>
+    <div class="stat"><div class="stat-value">${totalPay ? `$${totalPay.toFixed(2)}` : "—"}</div><div class="stat-label">Est. Pay</div></div>
+    <div class="stat"><div class="stat-value">${shifts.length}</div><div class="stat-label">Shifts</div></div>
+    <div class="stat"><div class="stat-value">${jobs.size}</div><div class="stat-label">Jobs</div></div>
+  `;
+
+  const list = document.getElementById("shiftList");
+
+  if (!shifts.length) {
+    list.innerHTML = `<div class="empty-state">No shifts logged for this week yet.</div>`;
+    return;
+  }
+
+  list.innerHTML = DAYS.map(day => {
+    const dayShifts = shifts.filter(shift => shift.day === day);
+    if (!dayShifts.length) return "";
+
+    return `
+      <div class="day-group">
+        <div class="day-header">${day}</div>
+        ${dayShifts.map(shift => `
+          <div class="shift">
+            <div class="shift-info">
+              <span class="shift-job">${escapeHtml(shift.job)}</span><br>
+              ${formatTime(shift.start)} – ${formatTime(shift.end)}
+              <span class="shift-hours">
+                ${(Number(shift.hours) || 0).toFixed(1)}h
+                ${shift.rate ? ` · $${((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2)}` : ""}
+              </span>
+            </div>
+            <button class="del-btn" onclick="deleteShift(${Number(shift.id)})">✕</button>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }).join("");
+}
+
+function render() {
+  if (currentView === "all") {
+    renderAllWeeks();
+    return;
+  }
+
+  if (currentView === "insights") {
+    renderInsights();
+    return;
+  }
+
+  renderSingleWeek();
+}
+
+async function handleAuth() {
+  const username = document.getElementById("authUsername").value.trim();
+  const password = document.getElementById("authPassword").value;
+
+  if (!username || !password) {
+    showToast("Enter a username and password");
+    return;
+  }
+
+  if (username.length < 3) {
+    showToast("Username must be at least 3 characters");
+    return;
+  }
+
+  try {
+    const email = usernameToEmail(username);
+
+    if (isSignUpMode) {
+      await createUserWithEmailAndPassword(auth, email, password);
+      showToast("Account created!");
+    } else {
+      await signInWithEmailAndPassword(auth, email, password);
+      showToast("Welcome back!");
+    }
+  } catch (error) {
+    console.error("Authentication error:", error);
+
+    let message = "Could not sign in.";
+    const code = error.code || "";
+
+    if (code === "auth/invalid-credential" || code === "auth/wrong-password") {
+      message = "Invalid username or password";
+    } else if (code === "auth/email-already-in-use") {
+      message = "Username already taken";
+    } else if (code === "auth/weak-password") {
+      message = "Password must be at least 6 characters";
+    }
+
+    showToast(message);
+  }
+}
+
+async function handleLogout() {
+  try {
+    if (unsubscribeSchedule) unsubscribeSchedule();
+
+    await signOut(auth);
+    currentUser = null;
+    loadLocalData();
+    render();
+
+    setSyncStatus("Showing schedule saved on this device.");
+    showToast("Logged out");
+  } catch {
+    showToast("Failed to log out");
+  }
+}
+
+function toggleAuthMode() {
+  isSignUpMode = !isSignUpMode;
+
+  document.getElementById("authTitle").textContent = isSignUpMode
+    ? "Create an account to sync your schedule"
+    : "Sign in to sync your schedule";
+
+  document.getElementById("authBtn").textContent = isSignUpMode
+    ? "Sign Up"
+    : "Login";
+
+  document.getElementById("authToggle").textContent = isSignUpMode
+    ? "Already have an account? Sign in"
+    : "Don't have an account? Sign up";
+}
+
+onAuthStateChanged(auth, user => {
+  currentUser = user;
+
+  const loggedOut = document.getElementById("loggedOutForm");
+  const loggedIn = document.getElementById("loggedInView");
+
+  if (user) {
+    loggedOut.style.display = "none";
+    loggedIn.style.display = "flex";
+    document.getElementById("userDisplay").textContent = emailToUsername(user.email);
+
+    loadLocalData();
+    startScheduleListener();
+    render();
+  } else {
+    loggedOut.style.display = "block";
+    loggedIn.style.display = "none";
+
+    loadLocalData();
+    setSyncStatus("Sign in to sync your schedule to Firebase.");
+    render();
+  }
+});
+
+window.handleAuth = handleAuth;
+window.handleLogout = handleLogout;
+window.toggleAuthMode = toggleAuthMode;
+window.changeWeek = changeWeek;
+window.setView = setView;
+window.jumpToWeek = jumpToWeek;
+window.addShift = addShift;
+window.deleteShift = deleteShift;
+
+(async () => {
+  await checkStorage();
+  loadLocalData();
+  render();
+})();
+</script>
+
+</body>
+</html>
