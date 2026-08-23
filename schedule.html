@@ -354,7 +354,7 @@
       <div class="week-label" id="weekLabel"></div>
       <button class="secondary" onclick="changeWeek(1)">Next →</button>
     </div>
-    <button class="secondary" style="width:100%; margin-top:10px;" onclick="downloadWeekCSV()">⬇ Download This Week</button>
+    <button class="secondary" style="width:100%; margin-top:10px;" onclick="downloadWeekPDF()">⬇ Download PDF</button>
   </div>
 
   <div class="card">
@@ -732,12 +732,16 @@ function changeWeek(delta) {
   render();
 }
 
-function csvEscape(value) {
-  const str = String(value ?? "");
-  return /[",\n]/.test(str) ? `"${str.replace(/"/g, '""')}"` : str;
+let jsPDFLoader = null;
+
+function loadJsPDF() {
+  if (!jsPDFLoader) {
+    jsPDFLoader = import("https://cdn.jsdelivr.net/npm/jspdf@2.5.2/+esm");
+  }
+  return jsPDFLoader;
 }
 
-function downloadWeekCSV() {
+async function downloadWeekPDF() {
   const key = weekKey(currentWeekOffset);
   const shifts = [...(data.weeks[key] || [])].sort((a, b) =>
     DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start)
@@ -748,36 +752,138 @@ function downloadWeekCSV() {
     return;
   }
 
-  const rows = [
-    ["Day", "Job", "Start", "End", "Hours", "Rate", "Pay"],
-    ...shifts.map(shift => [
-      shift.day,
-      shift.job,
-      formatTime(shift.start),
-      formatTime(shift.end),
-      (Number(shift.hours) || 0).toFixed(2),
-      shift.rate ? Number(shift.rate).toFixed(2) : "",
-      shift.rate ? ((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2) : ""
-    ])
-  ];
+  showToast("Preparing PDF…");
+
+  let jsPDFModule;
+  try {
+    jsPDFModule = await loadJsPDF();
+  } catch (error) {
+    console.error("Could not load PDF library:", error);
+    showToast("Could not load PDF generator — check your connection");
+    return;
+  }
+
+  const { jsPDF } = jsPDFModule;
+  const pdf = new jsPDF({ unit: "pt", format: "letter" });
+
+  const accent = [255, 138, 61];
+  const dark = [26, 16, 5];
+  const dim = [120, 126, 138];
+  const success = [58, 168, 94];
+
+  const marginX = 48;
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+  let y = 56;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(20);
+  pdf.setTextColor(...dark);
+  pdf.text("Weekly Schedule", marginX, y);
+
+  y += 22;
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(12);
+  pdf.setTextColor(...dim);
+  pdf.text(formatWeekLabel(currentWeekOffset), marginX, y);
 
   const totalHours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
   const totalPay = shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0);
-  rows.push([]);
-  rows.push(["Total", "", "", "", totalHours.toFixed(2), "", totalPay ? totalPay.toFixed(2) : ""]);
+  const jobCount = new Set(shifts.map(shift => shift.job).filter(Boolean)).size;
 
-  const csv = rows.map(row => row.map(csvEscape).join(",")).join("\r\n");
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
+  y += 26;
+  const statW = (pageWidth - marginX * 2 - 24) / 4;
+  const stats = [
+    ["Total Hours", `${totalHours.toFixed(1)}h`],
+    ["Est. Pay", totalPay ? `$${totalPay.toFixed(2)}` : "—"],
+    ["Shifts", `${shifts.length}`],
+    ["Jobs", `${jobCount}`]
+  ];
 
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `schedule_${key}.csv`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  stats.forEach((stat, i) => {
+    const x = marginX + i * (statW + 8);
+    pdf.setFillColor(18, 20, 26);
+    pdf.roundedRect(x, y, statW, 46, 6, 6, "F");
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(14);
+    pdf.setTextColor(...accent);
+    pdf.text(stat[1], x + statW / 2, y + 20, { align: "center" });
+    pdf.setFont("helvetica", "normal");
+    pdf.setFontSize(8);
+    pdf.setTextColor(...dim);
+    pdf.text(stat[0], x + statW / 2, y + 34, { align: "center" });
+  });
 
+  y += 46 + 30;
+
+  function ensureSpace(lineHeight) {
+    if (y + lineHeight > pageHeight - 50) {
+      pdf.addPage();
+      y = 56;
+    }
+  }
+
+  DAYS.forEach(day => {
+    const dayShifts = shifts.filter(shift => shift.day === day);
+    if (!dayShifts.length) return;
+
+    ensureSpace(24);
+    pdf.setFont("helvetica", "bold");
+    pdf.setFontSize(11);
+    pdf.setTextColor(...accent);
+    pdf.text(day.toUpperCase(), marginX, y);
+    y += 6;
+    pdf.setDrawColor(230, 230, 230);
+    pdf.line(marginX, y, pageWidth - marginX, y);
+    y += 16;
+
+    dayShifts.forEach(shift => {
+      ensureSpace(18);
+      pdf.setFont("helvetica", "bold");
+      pdf.setFontSize(10.5);
+      pdf.setTextColor(...dark);
+      pdf.text(shift.job || "Unnamed", marginX + 4, y);
+
+      pdf.setFont("helvetica", "normal");
+      pdf.setTextColor(...dim);
+      pdf.text(`${formatTime(shift.start)} – ${formatTime(shift.end)}`, marginX + 170, y);
+
+      const hoursPay = shift.rate
+        ? `${(Number(shift.hours) || 0).toFixed(1)}h · $${((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2)}`
+        : `${(Number(shift.hours) || 0).toFixed(1)}h`;
+
+      pdf.setTextColor(...success);
+      pdf.text(hoursPay, pageWidth - marginX, y, { align: "right" });
+
+      y += 18;
+    });
+
+    y += 8;
+  });
+
+  ensureSpace(30);
+  y += 6;
+  pdf.setDrawColor(210, 210, 210);
+  pdf.line(marginX, y, pageWidth - marginX, y);
+  y += 20;
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(11);
+  pdf.setTextColor(...dark);
+  pdf.text("Total", marginX, y);
+  pdf.text(
+    `${totalHours.toFixed(1)}h${totalPay ? `  ·  $${totalPay.toFixed(2)}` : ""}`,
+    pageWidth - marginX,
+    y,
+    { align: "right" }
+  );
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(8);
+  pdf.setTextColor(...dim);
+  pdf.text(`Generated ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`, marginX, pageHeight - 30);
+
+  pdf.save(`schedule_${key}.pdf`);
   showToast("Week downloaded ✓");
 }
 
@@ -1102,7 +1208,7 @@ window.setView = setView;
 window.jumpToWeek = jumpToWeek;
 window.addShift = addShift;
 window.deleteShift = deleteShift;
-window.downloadWeekCSV = downloadWeekCSV;
+window.downloadWeekPDF = downloadWeekPDF;
 
 (async () => {
   await checkStorage();
