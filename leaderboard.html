@@ -193,9 +193,11 @@
     </div>
   </div>
 
-  <div class="metric-tabs">
+  <div class="metric-tabs" style="flex-wrap: wrap;">
     <div class="metric-tab active" id="tabGoals" onclick="setMetric('goals')">🎯 Savings Goals</div>
     <div class="metric-tab" id="tabHours" onclick="setMetric('hours')">🗓️ This Week's Hours</div>
+    <div class="metric-tab" id="tabDebts" onclick="setMetric('debts')">💳 Debt Payoff</div>
+    <div class="metric-tab" id="tabStreaks" onclick="setMetric('streaks')">🔥 Shift Streaks</div>
   </div>
 
   <div class="card">
@@ -281,10 +283,12 @@
 
   let goalsDocs = {};   // uid -> { username, goals: [] }
   let scheduleDocs = {}; // uid -> { username, weeks: {} }
+  let debtsDocs = {};   // uid -> { username, debts: [] }
   let hiddenUids = new Set(); // uids an admin has hidden from the leaderboard
 
   let unsubGoals = null;
   let unsubSchedule = null;
+  let unsubDebts = null;
   let unsubDirectory = null;
 
   function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
@@ -330,10 +334,12 @@
   function clearListeners() {
     if (unsubGoals) { unsubGoals(); unsubGoals = null; }
     if (unsubSchedule) { unsubSchedule(); unsubSchedule = null; }
+    if (unsubDebts) { unsubDebts(); unsubDebts = null; }
     if (unsubChallenge) { unsubChallenge(); unsubChallenge = null; }
     if (unsubDirectory) { unsubDirectory(); unsubDirectory = null; }
     goalsDocs = {};
     scheduleDocs = {};
+    debtsDocs = {};
     hiddenUids = new Set();
   }
 
@@ -392,6 +398,33 @@
           );
         } else {
           setSyncStatus("Could not load schedules for the leaderboard. Check Firestore rules.", "error");
+        }
+      }
+    );
+
+    unsubDebts = onSnapshot(
+      collection(db, "debts"),
+      snapshot => {
+        const next = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          next[docSnap.id] = {
+            username: data.username || null,
+            debts: Array.isArray(data.debts) ? data.debts : []
+          };
+        });
+        debtsDocs = next;
+        render();
+      },
+      error => {
+        console.error("Leaderboard debts listener failed:", error);
+        if (error.code === "permission-denied") {
+          setSyncStatus(
+            "Can't load debts for the leaderboard: Firestore rules only allow each user to read their own 'debts' document. Add a rule permitting list/read access across the 'debts' collection for the leaderboard to see everyone's data.",
+            "error"
+          );
+        } else {
+          setSyncStatus("Could not load debts for the leaderboard. Check Firestore rules.", "error");
         }
       }
     );
@@ -612,13 +645,96 @@
     return entries.sort((a, b) => b.pct - a.pct);
   }
 
+  function buildDebtsLeaderboard() {
+    const entries = [];
+
+    Object.entries(debtsDocs).forEach(([uid, entry]) => {
+      if (hiddenUids.has(uid)) return;
+      const debts = entry.debts || [];
+      if (!debts.length) return;
+
+      const totalOriginal = debts.reduce((sum, d) => sum + (Number(d.originalAmount) || 0), 0);
+      const totalPaid = debts.reduce((sum, d) => {
+        return sum + Math.min(Number(d.paidAmount) || 0, Number(d.originalAmount) || 0);
+      }, 0);
+
+      if (totalOriginal <= 0) return;
+
+      const pct = Math.min(100, (totalPaid / totalOriginal) * 100);
+      const remaining = Math.max(0, totalOriginal - totalPaid);
+
+      entries.push({
+        uid,
+        name: displayName(uid, entry.username),
+        eventLabel: remaining > 0
+          ? `$${totalPaid.toFixed(0)} paid of $${totalOriginal.toFixed(0)} · $${remaining.toFixed(0)} left`
+          : `All debts paid off! 🎉`,
+        pct
+      });
+    });
+
+    return entries.sort((a, b) => b.pct - a.pct);
+  }
+
+  function buildStreaksLeaderboard() {
+    const entries = [];
+
+    Object.entries(scheduleDocs).forEach(([uid, entry]) => {
+      if (hiddenUids.has(uid)) return;
+      const weeks = entry.weeks || {};
+
+      const loggedWeekKeys = Object.keys(weeks)
+        .filter(key => Array.isArray(weeks[key]) && weeks[key].length > 0)
+        .sort((a, b) => new Date(a) - new Date(b));
+
+      if (!loggedWeekKeys.length) return;
+
+      // Count consecutive weeks (7-day gaps) ending at the most recent logged week
+      let streak = 1;
+      for (let i = loggedWeekKeys.length - 1; i > 0; i--) {
+        const cur = new Date(loggedWeekKeys[i]);
+        const prev = new Date(loggedWeekKeys[i - 1]);
+        const diffDays = Math.round((cur - prev) / (1000 * 60 * 60 * 24));
+        if (diffDays === 7) {
+          streak++;
+        } else {
+          break;
+        }
+      }
+
+      const mostRecentKey = loggedWeekKeys[loggedWeekKeys.length - 1];
+      const isCurrentWeek = mostRecentKey === weekKey(0);
+      const isLastWeek = mostRecentKey === weekKey(-1);
+      const stillActive = isCurrentWeek || isLastWeek;
+
+      // Cap the displayed percentage scale at 12 weeks (~3 months) for the progress bar
+      const pct = Math.min(100, (streak / 12) * 100);
+
+      entries.push({
+        uid,
+        name: displayName(uid, entry.username),
+        eventLabel: stillActive
+          ? `${streak} week${streak === 1 ? "" : "s"} in a row logging shifts`
+          : `${streak} week${streak === 1 ? "" : "s"} in a row (streak ended)`,
+        pct,
+        streak
+      });
+    });
+
+    return entries.sort((a, b) => b.streak - a.streak);
+  }
+
   function render() {
     renderCommunityGoal();
 
     const searchInput = document.getElementById("searchFilter");
     const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
 
-    let entries = activeMetric === "goals" ? buildGoalsLeaderboard() : buildHoursLeaderboard();
+    let entries;
+    if (activeMetric === "goals") entries = buildGoalsLeaderboard();
+    else if (activeMetric === "hours") entries = buildHoursLeaderboard();
+    else if (activeMetric === "debts") entries = buildDebtsLeaderboard();
+    else entries = buildStreaksLeaderboard();
 
     if (query) {
       entries = entries.filter(entry => entry.name.toLowerCase().includes(query));
@@ -629,10 +745,15 @@
     const listEl = document.getElementById("rankList");
 
     if (!entries.length) {
+      const emptyReasons = {
+        goals: "No upcoming goals with target dates found yet. Add some on the Goals page to join the leaderboard.",
+        hours: "No scheduled shifts found yet. Add some on the Schedule page to join the leaderboard.",
+        debts: "No debts logged yet. Add some on the Debts page to join the leaderboard.",
+        streaks: "No shift streaks yet. Log a shift on the Schedule page to start one."
+      };
       const reason = query
         ? `No participants match "${escapeHtml(query)}".`
-        : `No upcoming ${activeMetric === "goals" ? "goals with target dates" : "scheduled shifts"} found yet.
-           Add some on the ${activeMetric === "goals" ? "Goals" : "Schedule"} page to join the leaderboard.`;
+        : emptyReasons[activeMetric];
 
       listEl.innerHTML = `<div class="empty-state">${reason}</div>`;
       return;
@@ -641,6 +762,9 @@
     listEl.innerHTML = entries.map((entry, index) => {
       const position = index + 1;
       const isMe = currentUser && entry.uid === currentUser.uid;
+      const rankDisplay = activeMetric === "streaks"
+        ? `🔥 ${entry.streak}wk`
+        : `${entry.pct.toFixed(0)}%`;
       return `
         <div class="rank-row pos-${position} ${isMe ? "me" : ""}">
           <div class="rank-badge">${position <= 3 ? ["🥇", "🥈", "🥉"][position - 1] : position}</div>
@@ -650,7 +774,7 @@
                 ${escapeHtml(entry.name)}
                 ${isMe ? `<span class="you-tag">YOU</span>` : ""}
               </div>
-              <div class="rank-pct">${entry.pct.toFixed(0)}%</div>
+              <div class="rank-pct">${rankDisplay}</div>
             </div>
             <div class="rank-event">${entry.eventLabel}</div>
             <div class="progress-bar-bg">
@@ -666,6 +790,8 @@
     activeMetric = metric;
     document.getElementById("tabGoals").classList.toggle("active", metric === "goals");
     document.getElementById("tabHours").classList.toggle("active", metric === "hours");
+    document.getElementById("tabDebts").classList.toggle("active", metric === "debts");
+    document.getElementById("tabStreaks").classList.toggle("active", metric === "streaks");
     document.getElementById("hoursTargetWrap").style.display = metric === "hours" ? "block" : "none";
     render();
   }

@@ -502,6 +502,12 @@
     <div class="net-sub" id="netSub">Estimated earnings minus expenses</div>
   </div>
 
+  <div class="net-card" id="netWorthCard" style="display: none;">
+    <div class="net-label">Net Worth</div>
+    <div class="net-value" id="netWorthValue">$0.00</div>
+    <div class="net-sub" id="netWorthSub">Investments + savings goals − debts</div>
+  </div>
+
 <div class="apps-grid">
   <a href="/schedule.html" class="app-card">
     <div class="app-arrow">→</div>
@@ -1002,9 +1008,47 @@
     renderScheduleSection();
     renderExpenseSection();
     renderNetCard();
+    renderNetWorthCard();
     renderDebtsStat();
     renderGoalsStat();
     renderInvestmentsStat();
+  }
+
+  function renderNetWorthCard() {
+    const investments = investmentsData.investments || [];
+    const debts = debtsData.debts || [];
+    const goals = goalsData.goals || [];
+
+    const totalInvestments = investments.reduce((sum, inv) => sum + (Number(inv.currentValue) || 0), 0);
+
+    const totalOwed = debts.reduce((sum, debt) => {
+      const remaining = (Number(debt.originalAmount) || 0) - (Number(debt.paidAmount) || 0);
+      return sum + Math.max(0, remaining);
+    }, 0);
+
+    const totalGoalSavings = goals.reduce((sum, goal) => {
+      const saved = Math.min(Number(goal.currentAmount) || 0, Number(goal.targetAmount) || 0);
+      return sum + saved;
+    }, 0);
+
+    const netWorth = totalInvestments + totalGoalSavings - totalOwed;
+
+    const card = document.getElementById("netWorthCard");
+    const valueEl = document.getElementById("netWorthValue");
+    const subEl = document.getElementById("netWorthSub");
+
+    const hasAnyData = investments.length > 0 || debts.length > 0 || goals.length > 0;
+
+    if (!hasAnyData) {
+      card.style.display = "none";
+      return;
+    }
+
+    card.style.display = "block";
+    valueEl.textContent = `${netWorth >= 0 ? "+$" : "-$"}${Math.abs(netWorth).toFixed(2)}`;
+    valueEl.className = `net-value ${netWorth >= 0 ? "positive" : "negative"}`;
+    subEl.textContent =
+      `Investments $${totalInvestments.toFixed(0)} + goal savings $${totalGoalSavings.toFixed(0)} − debts $${totalOwed.toFixed(0)}`;
   }
 
   function renderDebtsStat() {
