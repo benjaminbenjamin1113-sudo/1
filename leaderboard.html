@@ -232,6 +232,7 @@
     getFirestore,
     collection,
     doc,
+    setDoc,
     onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -280,9 +281,11 @@
 
   let goalsDocs = {};   // uid -> { username, goals: [] }
   let scheduleDocs = {}; // uid -> { username, weeks: {} }
+  let hiddenUids = new Set(); // uids an admin has hidden from the leaderboard
 
   let unsubGoals = null;
   let unsubSchedule = null;
+  let unsubDirectory = null;
 
   function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
 
@@ -328,12 +331,15 @@
     if (unsubGoals) { unsubGoals(); unsubGoals = null; }
     if (unsubSchedule) { unsubSchedule(); unsubSchedule = null; }
     if (unsubChallenge) { unsubChallenge(); unsubChallenge = null; }
+    if (unsubDirectory) { unsubDirectory(); unsubDirectory = null; }
     goalsDocs = {};
     scheduleDocs = {};
+    hiddenUids = new Set();
   }
 
   function startListeners() {
     clearListeners();
+    registerInDirectory();
 
     unsubGoals = onSnapshot(
       collection(db, "goals"),
@@ -410,6 +416,35 @@
         // Falls back to the defaults above — not fatal to the rest of the page.
       }
     );
+
+    unsubDirectory = onSnapshot(
+      collection(db, "directory"),
+      snapshot => {
+        const next = new Set();
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          if (data.hidden === true) next.add(docSnap.id);
+        });
+        hiddenUids = next;
+        render();
+      },
+      error => {
+        console.error("Directory listener failed:", error);
+        // Non-fatal — leaderboard just won't respect admin-hidden users.
+      }
+    );
+  }
+
+  async function registerInDirectory() {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, "directory", currentUser.uid), {
+        username: emailToUsername(currentUser.email),
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Could not register in directory:", e);
+    }
   }
 
   function getMonday(offset = 0) {
@@ -475,7 +510,8 @@
   function renderCommunityGoal() {
     let totalHours = 0;
 
-    Object.values(scheduleDocs).forEach(entry => {
+    Object.entries(scheduleDocs).forEach(([uid, entry]) => {
+      if (hiddenUids.has(uid)) return;
       const weeks = entry.weeks || {};
       Object.values(weeks).forEach(shifts => {
         if (!Array.isArray(shifts)) return;
@@ -507,6 +543,7 @@
     const entries = [];
 
     Object.entries(goalsDocs).forEach(([uid, entry]) => {
+      if (hiddenUids.has(uid)) return;
       const upcoming = (entry.goals || [])
         .filter(g => !g.done && g.targetDate)
         .map(g => ({ goal: g, date: new Date(`${g.targetDate}T00:00:00`) }))
@@ -539,6 +576,7 @@
     const entries = [];
 
     Object.entries(scheduleDocs).forEach(([uid, entry]) => {
+      if (hiddenUids.has(uid)) return;
       const weeks = entry.weeks || {};
       const thisWeekShifts = Array.isArray(weeks[currentWeekKey]) ? weeks[currentWeekKey] : [];
       const hours = thisWeekShifts.reduce((sum, s) => sum + (Number(s.hours) || 0), 0);

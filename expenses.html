@@ -601,6 +601,19 @@
     return email ? email.split("@")[0] : "";
   }
 
+  // Registers this user in the shared directory on login, so admins can
+  // find and grant/hide anyone — not just people who've saved an expense.
+  async function registerInDirectory(user) {
+    try {
+      await setDoc(doc(db, "directory", user.uid), {
+        username: emailToUsername(user.email),
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Could not register in directory:", e);
+    }
+  }
+
   function escapeHtml(value) {
     return String(value)
       .replace(/&/g, "&amp;")
@@ -1291,6 +1304,7 @@
 
       loadLocalData();
       startExpenseListener();
+      registerInDirectory(user);
       render();
       return;
     }

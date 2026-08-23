@@ -76,7 +76,16 @@
     font-size: 11px; font-weight: 700; letter-spacing: 0.3px;
   }
   .badge.admin { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); }
+  .badge.role-owner { background: rgba(255, 209, 102, 0.15); color: #ffd166; border: 1px solid #ffd166; margin-left: 4px; }
+  .badge.role-admin { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent); margin-left: 4px; }
+  .badge.role-staff { background: rgba(74, 222, 128, 0.12); color: var(--success); border: 1px solid var(--success); margin-left: 4px; }
+  .badge.hidden { background: rgba(229, 72, 77, 0.15); color: #ff8a8f; border: 1px solid var(--danger); margin-left: 4px; }
   .badge.uid { background: #12141a; color: var(--text-dim); font-weight: 500; font-family: monospace; }
+
+  .role-select {
+    width: auto; padding: 6px 8px; font-size: 12px; border-radius: 8px;
+    border: 1px solid var(--border); background: #12141a; color: var(--text);
+  }
 
   .uid-hint {
     padding: 12px 14px; border-radius: 10px; background: #12141a;
@@ -95,10 +104,13 @@
   .admin-row {
     display: flex; align-items: center; justify-content: space-between;
     gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+    flex-wrap: wrap;
   }
   .admin-row:last-child { border-bottom: none; }
   .admin-row-name { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
   .admin-row-name .name { font-weight: 700; }
+  .row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .small-btn { padding: 6px 10px; font-size: 12px; }
   .empty-state { padding: 20px 10px; color: var(--text-dim); font-size: 13px; text-align: center; }
 
   .toast {
@@ -156,25 +168,28 @@
 <div id="accessDenied" style="display:none;">
   <div class="access-denied">
     <div class="big-icon">🚫</div>
-    <div><strong>Admins only.</strong></div>
-    <div style="margin-top:6px;">Your account doesn't have admin access.<br>Ask an existing admin to grant it to you.</div>
+    <div><strong>Staff access or above required.</strong></div>
+    <div style="margin-top:6px;">Your account is a Member — ask an Owner or Admin to grant you a role.</div>
   </div>
 
   <div class="uid-hint">
-    Share this UID with an existing admin so they can grant you access from this same page:
+    Share this UID with an Owner or Admin so they can grant you a role from this same page:
     <code id="yourUid">—</code>
   </div>
 </div>
 
 <div id="adminContent" style="display:none;">
 
-  <div class="uid-hint">
-    Bootstrapping the very first admin has to be done manually in the Firebase console
-    (Firestore → <code>roles</code> collection → new document with this ID and field <code>admin: true</code>):
-    <code id="yourUidInline">—</code>
+  <div class="uid-hint" style="display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;">
+    <div>Signed in as <span id="yourRoleBadge" class="badge">—</span></div>
+    <div style="text-align:right;">
+      Bootstrapping the very first Owner has to be done manually in the Firebase console
+      (Firestore → <code>roles</code> collection → new document with this ID and field <code>role: "owner"</code>):
+      <code id="yourUidInline">—</code>
+    </div>
   </div>
 
-  <div class="card">
+  <div class="card" id="challengeCard" style="display:none;">
     <h2>🌍 Community Challenge</h2>
     <div class="form-row full">
       <div>
@@ -201,26 +216,36 @@
     <button onclick="saveChallenge()">Save Challenge</button>
   </div>
 
-  <div class="card">
-    <h2>👑 Current Admins</h2>
-    <div id="adminList"></div>
-  </div>
-
-  <div class="card">
-    <h2>➕ Grant / Revoke Admin</h2>
+  <div class="card" id="quickGrantCard" style="display:none;">
+    <h2>➕ Quick Assign Role by Username</h2>
     <div class="form-row">
       <div>
         <label for="grantUsername">Username</label>
         <input id="grantUsername" type="text" placeholder="e.g. benjamin">
       </div>
+      <div>
+        <label for="grantRole">Role</label>
+        <select id="grantRole"></select>
+      </div>
     </div>
-    <div class="form-row">
-      <button onclick="grantAdmin()">Grant Admin</button>
-      <button class="secondary" onclick="revokeAdminByUsername()">Revoke Admin</button>
-    </div>
+    <button onclick="setRoleByUsername()">Set Role</button>
     <div class="empty-state" style="padding-top:10px;">
-      Looks up the username in saved Goals or Schedule data, so that person needs
-      to have signed in and saved something at least once before you can find them here.
+      Works for anyone who has ever signed in — they don't need to have saved a goal or shift.
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>👥 All Users</h2>
+    <div class="form-row full" style="margin-bottom:14px;">
+      <div>
+        <label for="userSearch">Search users</label>
+        <input id="userSearch" type="text" placeholder="Filter by name or UID…" oninput="renderUsersList()">
+      </div>
+    </div>
+    <div id="usersList"></div>
+    <div class="empty-state" style="padding-top:10px;">
+      Includes everyone who has ever signed in. "Hide from Leaderboard" removes them from
+      the rankings and community totals without affecting their own data.
     </div>
   </div>
 
@@ -270,16 +295,26 @@
   let currentUser = null;
   let isSignUpMode = false;
   let storageWorking = true;
-  let isAdmin = false;
+  let myRole = "member";
 
-  // Bootstrap admin: hardcoded so there's always at least one account that
-  // can grant roles/{uid} docs to everyone else. Remove once real admin
-  // docs exist and this is no longer needed.
-  const HARDCODED_ADMIN_USERNAME = "justin";
+  const ROLE_RANK = { member: 0, staff: 1, admin: 2, owner: 3 };
+  const ROLE_LABELS = { owner: "Owner", admin: "Admin", staff: "Staff", member: "Member" };
+
+  function rank(role) { return ROLE_RANK[role] ?? 0; }
+  function isStaffOrAbove(role) { return rank(role) >= ROLE_RANK.staff; }
+  function isAdminOrAbove(role) { return rank(role) >= ROLE_RANK.admin; }
+  function isOwner(role) { return role === "owner"; }
+
+  // Bootstrap owner: hardcoded so there's always at least one account that
+  // can grant roles/{uid} docs to everyone else. Remove once you're
+  // confident real owner docs exist and this is no longer needed.
+  const HARDCODED_OWNER_USERNAME = "justin";
 
   let unsubRoles = null;
-  let adminUids = new Set();
-  let usernameMap = {}; // uid -> username, resolved from goals/users collections
+  let unsubDirectory = null;
+  let roleByUid = {}; // uid -> role string ("owner" | "admin" | "staff")
+  let usernameMap = {}; // uid -> username, resolved from goals/users (legacy accounts)
+  let directoryEntries = {}; // uid -> { username, hidden } — live, from the directory collection
 
   function usernameToEmail(username) {
     const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
@@ -322,8 +357,10 @@
 
   function clearListeners() {
     if (unsubRoles) { unsubRoles(); unsubRoles = null; }
-    adminUids = new Set();
+    if (unsubDirectory) { unsubDirectory(); unsubDirectory = null; }
+    roleByUid = {};
     usernameMap = {};
+    directoryEntries = {};
   }
 
   async function resolveUsernameMap() {
@@ -362,6 +399,14 @@
       return currentUser.uid;
     }
 
+    // Directory covers anyone who's ever signed in, regardless of whether
+    // they've saved a goal or shift — check it first since it's already
+    // loaded live in memory.
+    const directoryMatch = Object.entries(directoryEntries)
+      .find(([, entry]) => (entry.username || "").toLowerCase() === clean);
+    if (directoryMatch) return directoryMatch[0];
+
+    // Fallback for legacy accounts that predate the directory collection.
     try {
       const q1 = query(collection(db, "goals"), where("username", "==", clean));
       const snap1 = await getDocs(q1);
@@ -381,23 +426,96 @@
     return null;
   }
 
-  function renderAdminList() {
-    const listEl = document.getElementById("adminList");
-    if (!adminUids.size) {
-      listEl.innerHTML = `<div class="empty-state">No admins found yet.</div>`;
+  function getAllKnownUsers() {
+    // Union of everyone in the directory (anyone who's ever signed in),
+    // everyone with a legacy username from goals/schedule, and anyone with
+    // an assigned role, so nobody with access falls out of the list.
+    const uids = new Set([
+      ...Object.keys(directoryEntries),
+      ...Object.keys(usernameMap),
+      ...Object.keys(roleByUid)
+    ]);
+
+    return [...uids].map(uid => {
+      const directoryEntry = directoryEntries[uid];
+      const isHardcodedOwner =
+        directoryEntry && (directoryEntry.username || "").toLowerCase() === HARDCODED_OWNER_USERNAME;
+
+      return {
+        uid,
+        username: (directoryEntry && directoryEntry.username) || usernameMap[uid] || null,
+        hidden: !!(directoryEntry && directoryEntry.hidden === true),
+        role: isHardcodedOwner ? "owner" : (roleByUid[uid] || "member")
+      };
+    }).sort((a, b) => {
+      const rankDiff = rank(b.role) - rank(a.role);
+      if (rankDiff !== 0) return rankDiff;
+      const nameA = (a.username || "").toLowerCase();
+      const nameB = (b.username || "").toLowerCase();
+      if (!nameA && nameB) return 1;
+      if (nameA && !nameB) return -1;
+      return nameA.localeCompare(nameB);
+    });
+  }
+
+  function renderUsersList() {
+    const listEl = document.getElementById("usersList");
+    const searchInput = document.getElementById("userSearch");
+    const searchTerm = searchInput ? searchInput.value.trim().toLowerCase() : "";
+
+    let users = getAllKnownUsers();
+    if (searchTerm) {
+      users = users.filter(u => (u.username || "").toLowerCase().includes(searchTerm) || u.uid.toLowerCase().includes(searchTerm));
+    }
+
+    if (!users.length) {
+      listEl.innerHTML = `<div class="empty-state">No users found${searchTerm ? " for that search" : " yet"}.</div>`;
       return;
     }
 
-    listEl.innerHTML = [...adminUids].map(uid => {
-      const name = usernameMap[uid] || null;
-      const isSelf = currentUser && uid === currentUser.uid;
+    listEl.innerHTML = users.map(user => {
+      const isSelf = currentUser && user.uid === currentUser.uid;
+      const isHardcodedOwner = user.username && user.username.toLowerCase() === HARDCODED_OWNER_USERNAME;
+      const name = user.username ? escapeHtml(user.username) : "Unknown user";
+
+      // What roles the acting user (myRole) is allowed to assign to this row.
+      let roleOptions = [];
+      if (myRole === "owner" && !isHardcodedOwner) {
+        roleOptions = ["owner", "admin", "staff", "member"];
+      } else if (myRole === "admin" && rank(user.role) < ROLE_RANK.admin) {
+        // Admins can only touch Staff/Member rows, never Owner/Admin ones.
+        roleOptions = ["staff", "member"];
+      }
+
+      const canEditRole = !isSelf && !isHardcodedOwner && roleOptions.length > 0;
+      const canToggleHidden = isStaffOrAbove(myRole);
+
+      const roleControl = canEditRole
+        ? `
+          <select class="role-select" onchange="changeRole('${user.uid}', this.value)">
+            ${roleOptions.map(r => `<option value="${r}" ${r === user.role ? "selected" : ""}>${ROLE_LABELS[r]}</option>`).join("")}
+          </select>
+        `
+        : `<span class="badge role-${user.role}">${ROLE_LABELS[user.role]}</span>`;
+
       return `
         <div class="admin-row">
           <div class="admin-row-name">
-            <div class="name">${name ? escapeHtml(name) : "Unknown user"} ${isSelf ? "(you)" : ""}</div>
-            <span class="badge uid">${uid}</span>
+            <div class="name">
+              ${name} ${isSelf ? "(you)" : ""}
+              ${user.role !== "member" && !canEditRole ? `<span class="badge role-${user.role}">${ROLE_LABELS[user.role]}</span>` : ""}
+              ${user.hidden ? `<span class="badge hidden">HIDDEN</span>` : ""}
+            </div>
+            <span class="badge uid">${user.uid}</span>
           </div>
-          <button class="danger-btn" ${isSelf ? "disabled title=\"You can't revoke your own access\"" : ""} onclick="revokeAdminByUid('${uid}')">Revoke</button>
+          <div class="row-actions">
+            ${canToggleHidden ? `
+              <button class="secondary small-btn" onclick="toggleHidden('${user.uid}', ${user.hidden})">
+                ${user.hidden ? "Show on Leaderboard" : "Hide from Leaderboard"}
+              </button>
+            ` : ""}
+            ${canEditRole ? roleControl : ""}
+          </div>
         </div>
       `;
     }).join("");
@@ -448,56 +566,65 @@
     }
   }
 
-  async function grantAdmin() {
+  async function setRoleByUsername() {
     const username = document.getElementById("grantUsername").value.trim();
+    const targetRole = document.getElementById("grantRole").value;
     if (!username) { showToast("Enter a username"); return; }
 
     const uid = await findUidByUsername(username);
     if (!uid) {
-      showToast("No user found with that username yet");
+      showToast("No user found with that username — they need to have signed in at least once");
       return;
     }
+
+    await changeRole(uid, targetRole, username);
+    document.getElementById("grantUsername").value = "";
+  }
+
+  async function changeRole(uid, newRole, label) {
+    if (currentUser && uid === currentUser.uid) {
+      showToast("You can't change your own role from here");
+      return;
+    }
+
+    // Client-side guardrail mirroring the Firestore rule: Admins can only
+    // ever set Staff or Member. Owners can set anything. This just gives a
+    // faster error message — the rule is what actually enforces it.
+    if (myRole === "admin" && !["staff", "member"].includes(newRole)) {
+      showToast("Admins can only assign Staff or Member roles");
+      return;
+    }
+
+    const name = label || (directoryEntries[uid] && directoryEntries[uid].username) || usernameMap[uid] || uid;
 
     try {
       await setDoc(doc(db, "roles", uid), {
-        admin: true,
+        role: newRole,
         updatedAt: Date.now(),
         grantedBy: currentUser.uid
-      }, { merge: true });
-      await resolveUsernameMap();
-      renderAdminList();
-      showToast(`Granted admin to ${username} ✓`);
-      document.getElementById("grantUsername").value = "";
+      });
+      showToast(`${name} is now ${ROLE_LABELS[newRole]} ✓`);
     } catch (e) {
-      console.error("Could not grant admin.", e);
-      showToast("Could not grant admin — check Firestore rules");
+      console.error("Could not update role.", e);
+      showToast("Could not update role — check Firestore rules");
     }
   }
 
-  async function revokeAdminByUsername() {
-    const username = document.getElementById("grantUsername").value.trim();
-    if (!username) { showToast("Enter a username"); return; }
+  async function toggleHidden(uid, currentlyHidden) {
+    const existingUsername =
+      (directoryEntries[uid] && directoryEntries[uid].username) || usernameMap[uid] || null;
 
-    const uid = await findUidByUsername(username);
-    if (!uid) {
-      showToast("No user found with that username yet");
-      return;
-    }
-
-    await revokeAdminByUid(uid);
-  }
-
-  async function revokeAdminByUid(uid) {
-    if (currentUser && uid === currentUser.uid) {
-      showToast("You can't revoke your own admin access from here");
-      return;
-    }
     try {
-      await deleteDoc(doc(db, "roles", uid));
-      showToast("Admin access revoked ✓");
+      await setDoc(doc(db, "directory", uid), {
+        ...(existingUsername ? { username: existingUsername } : {}),
+        hidden: !currentlyHidden,
+        updatedAt: Date.now(),
+        updatedBy: currentUser.uid
+      }, { merge: true });
+      showToast(currentlyHidden ? "User restored to leaderboard ✓" : "User hidden from leaderboard ✓");
     } catch (e) {
-      console.error("Could not revoke admin.", e);
-      showToast("Could not revoke admin — check Firestore rules");
+      console.error("Could not update leaderboard visibility.", e);
+      showToast("Could not update visibility — check Firestore rules");
     }
   }
 
@@ -506,24 +633,49 @@
     unsubRoles = onSnapshot(
       collection(db, "roles"),
       async snapshot => {
-        const next = new Set();
+        const next = {};
         snapshot.forEach(docSnap => {
           const data = docSnap.data();
-          if (data.admin === true) next.add(docSnap.id);
+          if (data.role && ROLE_RANK[data.role] !== undefined) {
+            next[docSnap.id] = data.role;
+          }
         });
         if (
           currentUser &&
-          emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME
+          emailToUsername(currentUser.email).toLowerCase() === HARDCODED_OWNER_USERNAME
         ) {
-          next.add(currentUser.uid);
+          next[currentUser.uid] = "owner";
         }
-        adminUids = next;
+        roleByUid = next;
         await resolveUsernameMap();
-        renderAdminList();
+        renderUsersList();
       },
       error => {
         console.error("Roles listener failed.", error);
-        setSyncStatus("Could not load admin list. Check Firestore rules for the 'roles' collection.", "error");
+        setSyncStatus("Could not load roles. Check Firestore rules for the 'roles' collection.", "error");
+      }
+    );
+  }
+
+  function startDirectoryListener() {
+    if (unsubDirectory) { unsubDirectory(); unsubDirectory = null; }
+    unsubDirectory = onSnapshot(
+      collection(db, "directory"),
+      snapshot => {
+        const next = {};
+        snapshot.forEach(docSnap => {
+          const data = docSnap.data();
+          next[docSnap.id] = {
+            username: data.username || null,
+            hidden: data.hidden === true
+          };
+        });
+        directoryEntries = next;
+        renderUsersList();
+      },
+      error => {
+        console.error("Directory listener failed.", error);
+        setSyncStatus("Could not load the user directory. Check Firestore rules for the 'directory' collection.", "error");
       }
     );
   }
@@ -536,30 +688,68 @@
     document.getElementById("adminContent").style.display = "none";
 
     try {
-      const isHardcodedAdmin =
-        emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME;
-      const roleSnap = await getDoc(doc(db, "roles", currentUser.uid));
-      isAdmin = isHardcodedAdmin || (roleSnap.exists() && roleSnap.data().admin === true);
+      const isHardcodedOwner =
+        emailToUsername(currentUser.email).toLowerCase() === HARDCODED_OWNER_USERNAME;
+      if (isHardcodedOwner) {
+        myRole = "owner";
+      } else {
+        const roleSnap = await getDoc(doc(db, "roles", currentUser.uid));
+        const storedRole = roleSnap.exists() ? roleSnap.data().role : null;
+        myRole = (storedRole && ROLE_RANK[storedRole] !== undefined) ? storedRole : "member";
+      }
     } catch (e) {
-      console.error("Could not check admin role.", e);
-      isAdmin = emailToUsername(currentUser.email).toLowerCase() === HARDCODED_ADMIN_USERNAME;
+      console.error("Could not check role.", e);
+      myRole = emailToUsername(currentUser.email).toLowerCase() === HARDCODED_OWNER_USERNAME
+        ? "owner" : "member";
     }
 
     document.getElementById("checkingAccess").style.display = "none";
     document.getElementById("yourUid").textContent = currentUser.uid;
     document.getElementById("yourUidInline").textContent = currentUser.uid;
 
-    if (!isAdmin) {
+    if (!isStaffOrAbove(myRole)) {
       document.getElementById("accessDenied").style.display = "block";
-      setSyncStatus("Signed in — admin access required to manage settings.");
+      setSyncStatus("Signed in — Staff access or above is required to view this panel.");
       return;
     }
 
     document.getElementById("adminContent").style.display = "block";
-    setSyncStatus("✓ Admin access confirmed.", "success");
+    document.getElementById("yourRoleBadge").textContent = ROLE_LABELS[myRole];
+    document.getElementById("yourRoleBadge").className = `badge role-${myRole}`;
 
-    await loadChallengeForm();
+    // Community challenge editing is Admin/Owner only — Staff can moderate
+    // the leaderboard but not rewrite the shared challenge.
+    document.getElementById("challengeCard").style.display = isAdminOrAbove(myRole) ? "block" : "none";
+    document.getElementById("quickGrantCard").style.display = isAdminOrAbove(myRole) ? "block" : "none";
+
+    setSyncStatus(`✓ Access confirmed as ${ROLE_LABELS[myRole]}.`, "success");
+
+    await registerInDirectory();
+    if (isAdminOrAbove(myRole)) {
+      await loadChallengeForm();
+      populateGrantRoleOptions();
+    }
     startRolesListener();
+    startDirectoryListener();
+  }
+
+  function populateGrantRoleOptions() {
+    const select = document.getElementById("grantRole");
+    if (!select) return;
+    const options = myRole === "owner" ? ["owner", "admin", "staff", "member"] : ["staff", "member"];
+    select.innerHTML = options.map(r => `<option value="${r}">${ROLE_LABELS[r]}</option>`).join("");
+  }
+
+  async function registerInDirectory() {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, "directory", currentUser.uid), {
+        username: emailToUsername(currentUser.email),
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (e) {
+      console.error("Could not register in directory:", e);
+    }
   }
 
   async function handleAuth() {
@@ -646,9 +836,10 @@
   window.handleLogout = handleLogout;
   window.toggleAuthMode = toggleAuthMode;
   window.saveChallenge = saveChallenge;
-  window.grantAdmin = grantAdmin;
-  window.revokeAdminByUsername = revokeAdminByUsername;
-  window.revokeAdminByUid = revokeAdminByUid;
+  window.setRoleByUsername = setRoleByUsername;
+  window.changeRole = changeRole;
+  window.toggleHidden = toggleHidden;
+  window.renderUsersList = renderUsersList;
 
   (async () => {
     await checkStorage();

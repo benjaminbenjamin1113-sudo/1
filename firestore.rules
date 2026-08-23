@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function roleOf(uid) {
+      return exists(/databases/$(database)/documents/roles/$(uid))
+        ? get(/databases/$(database)/documents/roles/$(uid)).data.role
+        : 'member';
+    }
+
+    function isOwner() {
+      return request.auth != null && (
+        request.auth.token.email == 'justin@scheduler.app' ||
+        roleOf(request.auth.uid) == 'owner'
+      );
+    }
+
+    function isAdminOrAbove() {
+      return isOwner() ||
+        (request.auth != null && roleOf(request.auth.uid) == 'admin');
+    }
+
+    function isStaffOrAbove() {
+      return isAdminOrAbove() ||
+        (request.auth != null && roleOf(request.auth.uid) == 'staff');
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /expenses/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /debts/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /goals/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    match /investments/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Directory of every user who has ever signed in — written by each user
+    // for their own uid on login (so anyone with panel access can find and
+    // grant/hide someone, not just people who've saved a goal or shift).
+    // Staff and above can also write other users' entries, to toggle
+    // leaderboard visibility.
+    match /directory/{userId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && (request.auth.uid == userId || isStaffOrAbove());
+    }
+
+    // Role assignments. Anyone signed in can read (needed to show/hide the
+    // Admin Panel card and gate its features client-side). Owners can set
+    // anyone to any role; Admins can only set Staff or Member (so an Admin
+    // can't promote themselves or someone else to Admin/Owner). Staff can't
+    // write roles at all.
+    match /roles/{userId} {
+      allow read: if request.auth != null;
+      allow write: if isOwner() ||
+        (isAdminOrAbove() && request.resource.data.role in ['staff', 'member']);
+    }
+
+    // Shared app configuration, e.g. the community challenge shown on the
+    // leaderboard. Everyone can read it; Admin and above can edit it.
+    match /config/{documentId} {
+      allow read: if request.auth != null;
+      allow write: if isAdminOrAbove();
+    }
+  }
+}

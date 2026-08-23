@@ -433,10 +433,6 @@
     <div class="welcome-sub" id="welcomeSub">
       Here's how things are looking.
     </div>
-
-    <a href="/admin.html" id="adminLink" style="display:none; margin-top:8px; font-size:12px; color: var(--accent); text-decoration: underline;">
-      🛠️ Admin Panel →
-    </a>
   </div>
 
   <div class="net-card" id="netCard" style="display: none;">
@@ -517,6 +513,18 @@
       <div class="app-stat-label">Current Value</div>
     </div>
   </a>
+
+  <a href="/admin.html" class="app-card" id="adminCard" style="display: none;">
+    <div class="app-arrow">→</div>
+    <div class="app-icon">🛡️</div>
+    <div class="app-title">Admin Panel</div>
+    <div class="app-desc">Manage roles, users, and the community challenge.</div>
+
+    <div class="app-stat">
+      <div class="app-stat-value" id="adminRoleLabel">—</div>
+      <div class="app-stat-label">Your Role</div>
+    </div>
+  </a>
 </div>
 
   <div class="overview-card">
@@ -546,6 +554,7 @@
     getFirestore,
     doc,
     getDoc,
+    setDoc,
     onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
@@ -1293,28 +1302,62 @@
     }
   }
 
-  // Bootstrap admin: hardcoded so there's always at least one account that
-  // can grant roles/{uid} docs to everyone else. Remove once real admin
+  // Registers this user in the shared directory on login, so admins can
+  // find and grant/hide anyone — not just people who've saved a goal or
+  // shift. Uses merge so it never clobbers an existing "hidden" flag.
+  async function registerInDirectory(user) {
+    try {
+      await setDoc(doc(db, "directory", user.uid), {
+        username: emailToUsername(user.email),
+        updatedAt: Date.now()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Could not register in directory:", error);
+    }
+  }
+
+  // Bootstrap owner: hardcoded so there's always at least one account that
+  // can grant roles/{uid} docs to everyone else. Remove once real owner
   // docs exist and this is no longer needed.
-  const HARDCODED_ADMIN_USERNAME = "justin";
+  const HARDCODED_OWNER_USERNAME = "justin";
+  const ROLE_LABELS = { owner: "Owner", admin: "Admin", staff: "Staff", member: "Member" };
+  const STAFF_OR_ABOVE = ["owner", "admin", "staff"];
 
   async function checkAdminRole(user) {
-    const adminLink = document.getElementById("adminLink");
+    const adminCard = document.getElementById("adminCard");
+    const adminRoleLabel = document.getElementById("adminRoleLabel");
     if (!user) {
-      adminLink.style.display = "none";
+      adminCard.style.display = "none";
       return;
     }
 
-    const isHardcodedAdmin =
-      emailToUsername(user.email).toLowerCase() === HARDCODED_ADMIN_USERNAME;
+    const isHardcodedOwner =
+      emailToUsername(user.email).toLowerCase() === HARDCODED_OWNER_USERNAME;
 
     try {
-      const roleSnap = await getDoc(doc(db, "roles", user.uid));
-      const isAdmin = isHardcodedAdmin || (roleSnap.exists() && roleSnap.data().admin === true);
-      adminLink.style.display = isAdmin ? "inline-block" : "none";
+      let role = "member";
+      if (isHardcodedOwner) {
+        role = "owner";
+      } else {
+        const roleSnap = await getDoc(doc(db, "roles", user.uid));
+        const storedRole = roleSnap.exists() ? roleSnap.data().role : null;
+        role = storedRole && ROLE_LABELS[storedRole] ? storedRole : "member";
+      }
+
+      if (STAFF_OR_ABOVE.includes(role)) {
+        adminCard.style.display = "flex";
+        adminRoleLabel.textContent = ROLE_LABELS[role];
+      } else {
+        adminCard.style.display = "none";
+      }
     } catch (error) {
-      console.error("Could not check admin role:", error);
-      adminLink.style.display = isHardcodedAdmin ? "inline-block" : "none";
+      console.error("Could not check role:", error);
+      if (isHardcodedOwner) {
+        adminCard.style.display = "flex";
+        adminRoleLabel.textContent = "Owner";
+      } else {
+        adminCard.style.display = "none";
+      }
     }
   }
 
@@ -1345,6 +1388,7 @@
 
       loadLocalData();
       listenForCloudData();
+      registerInDirectory(user);
       checkAdminRole(user);
       render();
       return;
