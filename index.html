@@ -427,7 +427,7 @@
 
   <div class="welcome-banner">
     <div class="welcome-title">
-      Welcome back, <span id="welcomeName"></span>! 👋
+      <span id="greetingWord">Welcome back</span>, <span id="welcomeName"></span>! <span id="greetingEmoji">👋</span>
     </div>
 
     <div class="welcome-sub" id="welcomeSub">
@@ -1361,6 +1361,27 @@
     }
   }
 
+  function applyTimeBasedGreeting() {
+    const hour = new Date().getHours();
+    let text, emoji;
+
+    if (hour >= 5 && hour < 12) {
+      text = "Good Morning";
+      emoji = "☀️";
+    } else if (hour >= 12 && hour < 18) {
+      text = "Good Afternoon";
+      emoji = "🌤️";
+    } else {
+      text = "Good Evening";
+      emoji = "🌙";
+    }
+
+    const greetingWord = document.getElementById("greetingWord");
+    const greetingEmoji = document.getElementById("greetingEmoji");
+    if (greetingWord) greetingWord.textContent = text;
+    if (greetingEmoji) greetingEmoji.textContent = emoji;
+  }
+
   onAuthStateChanged(auth, user => {
     currentUser = user;
 
@@ -1385,6 +1406,7 @@
       userDisplay.textContent = username;
       welcomeName.textContent = formattedName;
       welcomeSub.textContent = "Your cloud data updates automatically.";
+      applyTimeBasedGreeting();
 
       loadLocalData();
       listenForCloudData();
@@ -1407,6 +1429,7 @@
       dashboardContent.style.display = "block";
       welcomeName.textContent = "Guest";
       welcomeSub.textContent = "Sign in to sync data across devices.";
+      applyTimeBasedGreeting();
       setDataStatus("Showing data saved on this device.");
       render();
     } else {
