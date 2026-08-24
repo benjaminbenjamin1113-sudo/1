@@ -61,6 +61,12 @@ h1 { margin: 0 0 4px; font-size: 22px; }
 
 label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 12px; }
 
+input, select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
+  outline: none; background: #12141a; color: var(--text); font-size: 14px;
+}
+input:focus, select:focus { border-color: var(--accent); }
+
 button {
   width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
   background: var(--accent); color: #1a1005; cursor: pointer; font-size: 14px; font-weight: 600;

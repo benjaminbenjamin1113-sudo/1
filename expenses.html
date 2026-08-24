@@ -11,23 +11,6 @@
     grid-template-columns: 1fr;
   }
 
-  input,
-  select {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    outline: none;
-    background: #12141a;
-    color: var(--text);
-    font-size: 14px;
-  }
-
-  input:focus,
-  select:focus {
-    border-color: var(--accent);
-  }
-
   button.active {
     border-color: var(--accent);
     background: var(--accent);
@@ -212,6 +195,36 @@
     text-align: center;
   }
 
+  .recurring-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text-dim);
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .recurring-check input { width: auto; }
+
+  .recurring-badge {
+    margin-left: 6px;
+    font-size: 11px;
+  }
+
+  .savings-header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .savings-title { font-size: 14px; font-weight: 700; }
+  .savings-rate { font-size: 13px; font-weight: 700; }
+  .savings-rate.positive { color: var(--success); }
+  .savings-rate.negative { color: var(--danger); }
+  .savings-remaining { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+  .savings-remaining.positive { color: var(--success); }
+  .savings-remaining.negative { color: var(--danger); }
+  .savings-sub { color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+
 </style>
 </head>
 
@@ -333,12 +346,23 @@
       <div></div>
     </div>
 
+    <div class="form-row full">
+      <div>
+        <label class="recurring-check" for="expenseRecurring">
+          <input type="checkbox" id="expenseRecurring">
+          🔁 Repeat this every month
+        </label>
+      </div>
+    </div>
+
     <button onclick="addExpense()">+ Add Expense</button>
   </div>
 
   <div class="card">
     <div class="summary-grid" id="summary"></div>
   </div>
+
+  <div class="card" id="savingsBudgetCard"></div>
 
   <div class="card" id="expenseList"></div>
 </div>
@@ -388,17 +412,23 @@
     { name: "Other", emoji: "📦" }
   ];
 
+  const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const SAVINGS_TARGET = 0.8;
+
   let currentUser = null;
   let unsubscribeExpenses = null;
+  let unsubscribeSchedule = null;
   let currentMonthOffset = 0;
   let currentView = "single";
   let currentCategory = "Food";
   let isSignUpMode = false;
   let storageWorking = true;
   let cloudReady = false;
+  let scheduleDataCache = null;
 
   let data = {
-    months: {}
+    months: {},
+    recurring: []
   };
 
   function setSyncStatus(message, type = "") {
@@ -438,7 +468,8 @@
         const parsed = JSON.parse(raw);
 
         data = {
-          months: parsed.months || {}
+          months: parsed.months || {},
+          recurring: parsed.recurring || []
         };
       }
     } catch (error) {
@@ -522,6 +553,7 @@
 
       await setDoc(expenseRef, {
         months: data.months || {},
+        recurring: data.recurring || [],
         updatedAt: Date.now()
       });
 
@@ -567,7 +599,8 @@
           const cloudData = snapshot.data();
 
           data = {
-            months: cloudData.months || {}
+            months: cloudData.months || {},
+            recurring: cloudData.recurring || []
           };
 
           saveLocalData();
@@ -600,6 +633,130 @@
         );
       }
     );
+  }
+
+  // Reads the schedule doc (same users/{uid} doc schedule.html owns) just
+  // to compute scheduled income for the savings-budget card below — this
+  // page never writes to it. Firestore's rule for users/{userId} is
+  // already blanket-signed-in-read, so no rules change is needed.
+  function startScheduleListener() {
+    if (!currentUser) return;
+
+    if (unsubscribeSchedule) {
+      unsubscribeSchedule();
+      unsubscribeSchedule = null;
+    }
+
+    unsubscribeSchedule = onSnapshot(
+      doc(db, "users", currentUser.uid),
+      snapshot => {
+        scheduleDataCache = snapshot.exists() ? snapshot.data() : null;
+        render();
+      },
+      error => {
+        console.error("Schedule listener (for savings budget) failed:", error);
+        scheduleDataCache = null;
+      }
+    );
+  }
+
+  // Attributes each shift to the calendar month its actual date falls in
+  // (not the Monday-keyed week it's stored under, which can span two
+  // months) and sums hours × rate for shifts that have a rate set.
+  function computeScheduledIncomeForMonth(scheduleData, targetMonthKey) {
+    const weeks = scheduleData?.weeks || {};
+    let income = 0;
+
+    Object.entries(weeks).forEach(([weekKey, shifts]) => {
+      if (!Array.isArray(shifts)) return;
+
+      const monday = new Date(`${weekKey}T00:00:00`);
+      if (Number.isNaN(monday.getTime())) return;
+
+      shifts.forEach(shift => {
+        const dayIndex = DAYS.indexOf(shift.day);
+        if (dayIndex === -1) return;
+
+        const shiftDate = new Date(monday);
+        shiftDate.setDate(monday.getDate() + dayIndex);
+
+        const shiftMonthKey = [
+          shiftDate.getFullYear(),
+          String(shiftDate.getMonth() + 1).padStart(2, "0")
+        ].join("-");
+
+        if (shiftMonthKey !== targetMonthKey) return;
+
+        income += (Number(shift.hours) || 0) * (Number(shift.rate) || 0);
+      });
+    });
+
+    return income;
+  }
+
+  function renderSavingsBudget(spentThisMonth) {
+    const card = document.getElementById("savingsBudgetCard");
+    if (!card) return;
+
+    if (!scheduleDataCache) {
+      card.innerHTML = `<div class="empty-state">Log shifts with an hourly rate on the Schedule page to see your savings budget.</div>`;
+      return;
+    }
+
+    const income = computeScheduledIncomeForMonth(scheduleDataCache, monthKey(currentMonthOffset));
+
+    if (income <= 0) {
+      card.innerHTML = `<div class="empty-state">No scheduled income with an hourly rate found for this month yet.</div>`;
+      return;
+    }
+
+    const maxSpend = income * (1 - SAVINGS_TARGET);
+    const remaining = maxSpend - spentThisMonth;
+    const currentRate = ((income - spentThisMonth) / income) * 100;
+    const onTrack = currentRate >= SAVINGS_TARGET * 100;
+
+    card.innerHTML = `
+      <div class="savings-header">
+        <div class="savings-title">💰 80% Savings Budget</div>
+        <div class="savings-rate ${onTrack ? "positive" : "negative"}">${currentRate.toFixed(0)}% saved</div>
+      </div>
+      <div class="savings-remaining ${remaining >= 0 ? "positive" : "negative"}">
+        ${remaining >= 0 ? `$${remaining.toFixed(2)} left to spend` : `$${Math.abs(remaining).toFixed(2)} over budget`}
+      </div>
+      <div class="savings-sub">Based on $${income.toFixed(2)} scheduled income this month — a 20% spending cap is $${maxSpend.toFixed(2)}.</div>
+    `;
+  }
+
+  // Fills in any recurring templates missing from this month (matched by
+  // recurringId), so a month you haven't opened yet — or haven't opened
+  // since marking something recurring — still shows it. Returns whether
+  // anything was actually inserted, so the caller only saves when needed.
+  function applyRecurringToMonth(key) {
+    if (!Array.isArray(data.recurring) || !data.recurring.length) return false;
+    if (!data.months[key]) data.months[key] = [];
+
+    const existingRecurringIds = new Set(
+      data.months[key].filter(expense => expense.recurringId).map(expense => expense.recurringId)
+    );
+
+    let changed = false;
+
+    data.recurring.forEach(template => {
+      if (existingRecurringIds.has(template.id)) return;
+
+      data.months[key].push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        name: template.name,
+        amount: template.amount,
+        category: template.category,
+        date: `${key}-01`,
+        recurringId: template.id
+      });
+
+      changed = true;
+    });
+
+    return changed;
   }
 
   function renderCategoryPicker() {
@@ -686,29 +843,34 @@
     }
 
     const key = date.slice(0, 7);
+    const isRecurring = document.getElementById("expenseRecurring").checked;
+    const entryId = Date.now();
 
     if (!data.months[key]) {
       data.months[key] = [];
     }
 
-    data.months[key].push({
-      id: Date.now(),
-      name,
-      amount,
-      category: currentCategory,
-      date
-    });
+    const entry = { id: entryId, name, amount, category: currentCategory, date };
+    if (isRecurring) entry.recurringId = entryId;
+
+    data.months[key].push(entry);
+
+    if (isRecurring) {
+      if (!Array.isArray(data.recurring)) data.recurring = [];
+      data.recurring.push({ id: entryId, name, amount, category: currentCategory });
+    }
 
     saveLocalData();
     render();
 
     document.getElementById("expenseName").value = "";
     document.getElementById("expenseAmount").value = "";
+    document.getElementById("expenseRecurring").checked = false;
 
     const savedToCloud = await saveCloudData();
 
     if (savedToCloud) {
-      showToast("Expense added and saved to cloud ✓");
+      showToast(isRecurring ? "Recurring expense added ✓" : "Expense added and saved to cloud ✓");
     } else {
       showToast("Expense added locally, but cloud save failed");
     }
@@ -719,10 +881,23 @@
       return;
     }
 
+    const removed = data.months[key].find(expense => expense.id === id);
+
     data.months[key] = data.months[key].filter(expense => expense.id !== id);
 
     if (data.months[key].length === 0) {
       delete data.months[key];
+    }
+
+    // Deleting a recurring expense stops it from repeating — the whole
+    // point of a "delete" action here — rather than leaving the template
+    // behind to silently reappear the next time this month (or any other)
+    // gets viewed.
+    let stoppedRecurring = false;
+    if (removed?.recurringId && Array.isArray(data.recurring)) {
+      const before = data.recurring.length;
+      data.recurring = data.recurring.filter(template => template.id !== removed.recurringId);
+      stoppedRecurring = data.recurring.length !== before;
     }
 
     saveLocalData();
@@ -730,10 +905,12 @@
 
     const savedToCloud = await saveCloudData();
 
-    if (savedToCloud) {
-      showToast("Expense deleted and cloud updated ✓");
-    } else {
+    if (!savedToCloud) {
       showToast("Deleted locally, but cloud update failed");
+    } else if (stoppedRecurring) {
+      showToast("Recurring expense removed — it won't repeat next month ✓");
+    } else {
+      showToast("Expense deleted and cloud updated ✓");
     }
   }
 
@@ -836,6 +1013,12 @@
       }
     }
 
+    const recurringChanged = applyRecurringToMonth(selectedMonthKey);
+    if (recurringChanged) {
+      saveLocalData();
+      saveCloudData();
+    }
+
     const expenses = Array.isArray(data.months?.[selectedMonthKey])
       ? [...data.months[selectedMonthKey]]
       : [];
@@ -880,6 +1063,8 @@
         <div class="stat-label">Categories</div>
       </div>
     `;
+
+    renderSavingsBudget(total);
 
     const expenseList = document.getElementById("expenseList");
 
@@ -937,7 +1122,7 @@
           ${categoryExpenses.map(expense => `
             <div class="expense">
               <div class="expense-info">
-                <div class="expense-name">${escapeHtml(expense.name || "Unnamed")}</div>
+                <div class="expense-name">${escapeHtml(expense.name || "Unnamed")}${expense.recurringId ? '<span class="recurring-badge" title="Repeats every month">🔁</span>' : ""}</div>
                 <div class="expense-category">${formatDate(expense.date)}</div>
               </div>
 
@@ -1023,10 +1208,16 @@
         unsubscribeExpenses = null;
       }
 
+      if (unsubscribeSchedule) {
+        unsubscribeSchedule();
+        unsubscribeSchedule = null;
+      }
+
       await signOut(auth);
 
       currentUser = null;
       cloudReady = false;
+      scheduleDataCache = null;
 
       loadLocalData();
       render();
@@ -1073,6 +1264,7 @@
 
       loadLocalData();
       startExpenseListener();
+      startScheduleListener();
       registerInDirectory(user);
       initFriendsDropdown(user.uid, emailToUsername(user.email));
       render();
@@ -1082,6 +1274,12 @@
     loggedOutForm.style.display = "block";
     loggedInView.style.display = "none";
     teardownFriendsDropdown();
+
+    if (unsubscribeSchedule) {
+      unsubscribeSchedule();
+      unsubscribeSchedule = null;
+    }
+    scheduleDataCache = null;
 
     loadLocalData();
     setSyncStatus("Sign in to sync expenses to Firebase.");

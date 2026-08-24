@@ -115,8 +115,15 @@ service cloud.firestore {
     // remove. Only the sender can create, and only with status 'pending' —
     // you can't create an already-accepted friendship for yourself.
     match /friendRequests/{requestId} {
+      // resource is null when no doc exists yet at this id — both
+      // sendFriendRequest() and the schedule.html friend-view checker do a
+      // getDoc() *before* any relationship exists, to see whether one
+      // already does. Without the resource == null branch, accessing
+      // resource.data on a null resource throws inside the rule itself,
+      // which Firestore treats as permission-denied rather than "not
+      // found" — silently breaking every first-time friend request.
       allow read: if request.auth != null &&
-        (request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
+        (resource == null || request.auth.uid == resource.data.from || request.auth.uid == resource.data.to);
       allow create: if request.auth != null && request.auth.uid == request.resource.data.from
         && request.resource.data.status == 'pending';
       allow update: if request.auth != null &&
