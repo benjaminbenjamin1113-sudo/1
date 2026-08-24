@@ -192,16 +192,6 @@
     text-decoration: underline;
   }
 
-  .auth-user-info {
-    color: var(--text);
-    font-size: 13px;
-  }
-
-  .auth-user-info span {
-    color: var(--accent);
-    font-weight: 600;
-  }
-
   .welcome-banner {
     margin-bottom: 16px;
     padding: 20px;
@@ -227,6 +217,12 @@
   .welcome-sub {
     color: var(--text-dim);
     font-size: 13px;
+  }
+
+  .welcome-actions {
+    display: flex;
+    flex-shrink: 0;
+    gap: 8px;
   }
 
   .net-card {
@@ -586,13 +582,21 @@
         </div>
       </div>
 
-      <button class="secondary" id="welcomeLogoutBtn" onclick="handleLogout()" style="display: none; padding: 6px 12px; font-size: 12px; flex-shrink: 0;">
-        Logout
-      </button>
+      <div class="welcome-actions">
+        <div id="friendsDropdownRoot"></div>
 
-      <button id="welcomeSignInBtn" onclick="focusSignIn()" style="display: none; padding: 6px 12px; font-size: 12px; flex-shrink: 0; width: auto;">
-        Sign In
-      </button>
+        <button class="secondary" id="welcomeProfileBtn" onclick="location.href='/profile.html'" style="display: none; padding: 6px 12px; font-size: 12px; width: auto;">
+          Profile
+        </button>
+
+        <button class="secondary" id="welcomeLogoutBtn" onclick="handleLogout()" style="display: none; padding: 6px 12px; font-size: 12px; width: auto;">
+          Logout
+        </button>
+
+        <button id="welcomeSignInBtn" onclick="focusSignIn()" style="display: none; padding: 6px 12px; font-size: 12px; width: auto;">
+          Sign In
+        </button>
+      </div>
     </div>
   </div>
 
@@ -689,6 +693,30 @@
     </div>
   </a>
 
+  <a href="/market.html" class="app-card">
+    <div class="app-arrow">→</div>
+    <div class="app-icon">📊</div>
+    <div class="app-title">Market</div>
+    <div class="app-desc">Live prices and graphs for top stocks and crypto.</div>
+
+    <div class="app-stat">
+      <div class="app-stat-value">Stocks · Crypto</div>
+      <div class="app-stat-label">Live Prices</div>
+    </div>
+  </a>
+
+  <a href="/friends.html" class="app-card">
+    <div class="app-arrow">→</div>
+    <div class="app-icon">👥</div>
+    <div class="app-title">Friends</div>
+    <div class="app-desc">Send requests, manage friends, and view published schedules.</div>
+
+    <div class="app-stat">
+      <div class="app-stat-value" id="friendsNotifCount">—</div>
+      <div class="app-stat-label">New Notifications</div>
+    </div>
+  </a>
+
   <a href="/admin.html" class="app-card" id="adminCard" style="display: none;">
     <div class="app-arrow">→</div>
     <div class="app-icon">🛡️</div>
@@ -716,43 +744,32 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
   import {
-    getAuth,
+    auth,
+    db,
+    emailToUsername,
+    usernameToEmail,
+    escapeHtml,
+    registerInDirectory,
+    showToast,
+    applyTimeBasedGreeting
+  } from "./shared/firebase.js";
+  import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import {
-    getFirestore,
     doc,
     getDoc,
     setDoc,
     onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
-    authDomain: "scheduler-609b0.firebaseapp.com",
-    projectId: "scheduler-609b0",
-    storageBucket: "scheduler-609b0.firebasestorage.app",
-    messagingSenderId: "151764758872",
-    appId: "1:151764758872:web:4382212aaa6e870395b52d",
-    measurementId: "G-MX8DN7YLB2"
-  };
-
-  const app = initializeApp(firebaseConfig);
-
-  try {
-    getAnalytics(app);
-  } catch (error) {
-    console.warn("Analytics bypassed for local environment.", error);
-  }
-
-  const auth = getAuth(app);
-  const db = getFirestore(app);
+  import {
+    initFriendsDropdown,
+    teardownFriendsDropdown
+  } from "./shared/notifications.js";
 
   const SCHEDULE_KEY = "benjamin-schedule-tracker-data";
   const EXPENSE_KEY = "benjamin-expense-tracker-data";
@@ -787,6 +804,7 @@
   let debtsListener = null;
   let goalsListener = null;
   let investmentsListener = null;
+  let friendsNotifListener = null;
   let scheduleCloudLoaded = false;
   let expenseCloudLoaded = false;
 
@@ -803,40 +821,8 @@
   let goalsData = { goals: [] };
   let investmentsData = { investments: [] };
 
-  function usernameToEmail(username) {
-    const cleanUsername = username
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9_.-]/g, "");
-
-    return `${cleanUsername}@scheduler.app`;
-  }
-
-  function emailToUsername(email) {
-    return email ? email.split("@")[0] : "";
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
-
   function setDataStatus(message) {
     document.getElementById("dataStatus").textContent = message;
-  }
-
-  function showToast(message) {
-    const toast = document.getElementById("toast");
-    toast.textContent = message;
-    toast.classList.add("show");
-
-    setTimeout(() => {
-      toast.classList.remove("show");
-    }, 1600);
   }
 
   async function checkStorage() {
@@ -918,6 +904,26 @@
       investmentsListener();
       investmentsListener = null;
     }
+
+    if (friendsNotifListener) {
+      friendsNotifListener();
+      friendsNotifListener = null;
+    }
+
+    document.getElementById("friendsNotifCount").textContent = "—";
+    teardownFriendsDropdown();
+  }
+
+  function watchFriendsNotifications(uid) {
+    if (friendsNotifListener) friendsNotifListener();
+
+    friendsNotifListener = onSnapshot(doc(db, "notifications", uid), snapshot => {
+      const items = snapshot.exists() && Array.isArray(snapshot.data().items) ? snapshot.data().items : [];
+      const unread = items.filter(n => !n.read).length;
+      document.getElementById("friendsNotifCount").textContent = unread;
+    }, error => {
+      console.error("Friends notification watch failed:", error);
+    });
   }
 
   function updateCloudStatus() {
@@ -1636,20 +1642,6 @@
     }
   }
 
-  // Registers this user in the shared directory on login, so admins can
-  // find and grant/hide anyone — not just people who've saved a goal or
-  // shift. Uses merge so it never clobbers an existing "hidden" flag.
-  async function registerInDirectory(user) {
-    try {
-      await setDoc(doc(db, "directory", user.uid), {
-        username: emailToUsername(user.email),
-        updatedAt: Date.now()
-      }, { merge: true });
-    } catch (error) {
-      console.error("Could not register in directory:", error);
-    }
-  }
-
   // Bootstrap owner: hardcoded so there's always at least one account that
   // can grant roles/{uid} docs to everyone else. Remove once real owner
   // docs exist and this is no longer needed.
@@ -1695,27 +1687,6 @@
     }
   }
 
-  function applyTimeBasedGreeting() {
-    const hour = new Date().getHours();
-    let text, emoji;
-
-    if (hour >= 5 && hour < 12) {
-      text = "Good Morning";
-      emoji = "☀️";
-    } else if (hour >= 12 && hour < 18) {
-      text = "Good Afternoon";
-      emoji = "🌤️";
-    } else {
-      text = "Good Evening";
-      emoji = "🌙";
-    }
-
-    const greetingWord = document.getElementById("greetingWord");
-    const greetingEmoji = document.getElementById("greetingEmoji");
-    if (greetingWord) greetingWord.textContent = text;
-    if (greetingEmoji) greetingEmoji.textContent = emoji;
-  }
-
   function openAuthModal(closable) {
     const overlay = document.getElementById("authModalOverlay");
     const closeBtn = document.getElementById("authModalCloseBtn");
@@ -1747,6 +1718,7 @@
     const overlay = document.getElementById("authModalOverlay");
     const loggedOutForm = document.getElementById("loggedOutForm");
     const dashboardContent = document.getElementById("dashboardContent");
+    const welcomeProfileBtn = document.getElementById("welcomeProfileBtn");
     const welcomeLogoutBtn = document.getElementById("welcomeLogoutBtn");
     const welcomeSignInBtn = document.getElementById("welcomeSignInBtn");
     const welcomeName = document.getElementById("welcomeName");
@@ -1763,6 +1735,7 @@
       loggedOutForm.style.display = "none";
       dashboardContent.style.display = "block";
 
+      welcomeProfileBtn.style.display = "inline-block";
       welcomeLogoutBtn.style.display = "inline-block";
       welcomeSignInBtn.style.display = "none";
       welcomeName.textContent = formattedName;
@@ -1773,11 +1746,14 @@
       listenForCloudData();
       registerInDirectory(user);
       checkAdminRole(user);
+      watchFriendsNotifications(user.uid);
+      initFriendsDropdown(user.uid, username);
       render();
       return;
     }
 
     loggedOutForm.style.display = "block";
+    welcomeProfileBtn.style.display = "none";
     welcomeLogoutBtn.style.display = "none";
     checkAdminRole(null);
 

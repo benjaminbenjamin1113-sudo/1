@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Profile</title>
+<link rel="stylesheet" href="./shared/base.css">
+
+<style>
+  .profile-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+  .profile-header-info { display: flex; align-items: center; gap: 14px; }
+  .avatar {
+    display: flex; align-items: center; justify-content: center;
+    width: 56px; height: 56px; flex: none; border-radius: 50%;
+    background: var(--accent-soft); color: var(--accent); font-size: 24px; font-weight: 700;
+  }
+  .profile-name { font-size: 18px; font-weight: 700; }
+  .profile-name .you-tag {
+    margin-left: 8px; padding: 2px 8px; border-radius: 20px; background: var(--accent-soft);
+    color: var(--accent); font-size: 10px; font-weight: 700; vertical-align: middle;
+  }
+  .profile-meta { margin-top: 2px; color: var(--text-dim); font-size: 12px; }
+
+  .visibility-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .visibility-copy { flex: 1; }
+  .visibility-title { font-size: 14px; font-weight: 700; }
+  .visibility-desc { margin-top: 2px; color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+  .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: none; }
+  .switch input { display: none; }
+  .switch-track {
+    position: absolute; inset: 0; border-radius: 999px; background: #2a2e38;
+    cursor: pointer; transition: background 0.2s;
+  }
+  .switch-track::before {
+    content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--text-dim); transition: transform 0.2s, background 0.2s;
+  }
+  .switch input:checked + .switch-track { background: var(--accent-soft); }
+  .switch input:checked + .switch-track::before { transform: translateX(20px); background: var(--accent); }
+  .link-row { display: flex; gap: 8px; margin-top: 12px; }
+  .link-row input { flex: 1; color: var(--text-dim); }
+  .link-row button { width: auto; padding: 8px 14px; font-size: 12px; }
+
+  .private-state {
+    padding: 40px 16px; text-align: center; color: var(--text-dim); font-size: 14px;
+  }
+  .private-state .icon { margin-bottom: 10px; font-size: 32px; }
+
+  .section-heading { margin: 24px 0 10px; font-size: 15px; font-weight: 700; color: var(--text); }
+  .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .stat { padding: 12px; border-radius: 8px; background: #12141a; text-align: center; }
+  .stat-value { color: var(--accent); font-size: 20px; font-weight: 700; }
+  .stat-value.positive { color: var(--success); }
+  .stat-value.negative { color: var(--danger); }
+  .stat-label { margin-top: 2px; color: var(--text-dim); font-size: 11px; }
+
+  .net-card { padding: 20px 16px; text-align: center; }
+  .net-value { font-size: 32px; font-weight: 800; color: var(--accent); }
+  .net-label { margin-top: 4px; color: var(--text-dim); font-size: 12px; }
+</style>
+</head>
+
+<body>
+
+<h1>👤 Profile</h1>
+<div class="subtitle" id="pageSubtitle">All-time stats across goals, income, debts, and investments.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="sync-status" id="syncStatus"></div>
+
+<div class="auth-card" id="loggedOutForm">
+  <div class="auth-header" id="authTitle">Sign in to view profiles</div>
+  <div class="form-row">
+    <div>
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
+    </div>
+    <div>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+  </div>
+  <div style="margin-top:12px;">
+    <button id="authBtn" onclick="handleAuth()">Login</button>
+  </div>
+  <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+</div>
+
+<div class="welcome-banner" id="loggedInView" style="display:none;">
+  <div class="welcome-banner-row">
+    <div>
+      <div class="welcome-title">
+        <span id="greetingWord">Welcome back</span>, <span id="userDisplay"></span>! <span id="greetingEmoji">👋</span>
+      </div>
+      <div class="welcome-sub">Browsing profiles and all-time stats.</div>
+    </div>
+    <div class="welcome-actions">
+      <div id="friendsDropdownRoot"></div>
+      <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px; width:auto;">Logout</button>
+    </div>
+  </div>
+</div>
+
+<div id="profileContent" style="display:none;">
+
+  <div class="card profile-header">
+    <div class="profile-header-info">
+      <div class="avatar" id="avatarInitial">?</div>
+      <div>
+        <div class="profile-name"><span id="profileUsername">—</span><span class="you-tag" id="youTag" style="display:none;">YOU</span></div>
+        <div class="profile-meta" id="profileMeta">—</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" id="visibilityCard" style="display:none;">
+    <div class="visibility-row">
+      <div class="visibility-copy">
+        <div class="visibility-title">Public profile</div>
+        <div class="visibility-desc">When on, any signed-in user can view your all-time stats below via your profile link.</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" id="publicToggle" onchange="setProfilePublic(this.checked)">
+        <span class="switch-track"></span>
+      </label>
+    </div>
+    <div class="link-row">
+      <input id="profileLinkInput" readonly>
+      <button class="secondary" onclick="copyProfileLink()">Copy Link</button>
+    </div>
+  </div>
+
+  <div class="card" id="privateCard" style="display:none;">
+    <div class="private-state">
+      <div class="icon">🔒</div>
+      <div id="privateMessage">This profile is private.</div>
+    </div>
+  </div>
+
+  <div id="statsSections" style="display:none;">
+    <div class="section-heading">🎯 Goals</div>
+    <div class="card">
+      <div class="summary-grid" id="goalsStats"></div>
+    </div>
+
+    <div class="section-heading">💰 Income</div>
+    <div class="card">
+      <div class="summary-grid" id="incomeStats"></div>
+    </div>
+
+    <div class="section-heading">💳 Debts</div>
+    <div class="card">
+      <div class="summary-grid" id="debtsStats"></div>
+    </div>
+
+    <div class="section-heading">📈 Investments</div>
+    <div class="card">
+      <div class="summary-grid" id="investmentsStats"></div>
+    </div>
+
+    <div class="section-heading">💸 Expenses</div>
+    <div class="card">
+      <div class="summary-grid" id="expensesStats"></div>
+    </div>
+
+    <div class="section-heading">📊 Net Position</div>
+    <div class="card net-card">
+      <div class="net-value" id="netPositionValue">$0</div>
+      <div class="net-label">Saved toward goals + investment value − remaining debt</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import {
+    auth,
+    db,
+    emailToUsername,
+    usernameToEmail,
+    cleanUsername,
+    escapeHtml,
+    registerInDirectory,
+    showToast,
+    applyTimeBasedGreeting
+  } from "./shared/firebase.js";
+  import {
+    initFriendsDropdown,
+    teardownFriendsDropdown
+  } from "./shared/notifications.js";
+  import {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    doc,
+    setDoc,
+    onSnapshot,
+    collection,
+    query,
+    where,
+    getDocs
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+  const params = new URLSearchParams(location.search);
+  const requestedUsername = params.get("u");
+
+  let currentUser = null;
+  let profileUid = null;
+  let isOwnProfile = true;
+  let isSignUpMode = false;
+
+  let unsubDirectory = null;
+  let unsubGoals = null;
+  let unsubDebts = null;
+  let unsubInvestments = null;
+  let unsubExpenses = null;
+  let unsubSchedule = null;
+
+  // Usernames map 1:1 to Firebase Auth emails (enforced unique by Auth
+  // itself), so they're a stable, copyable identifier for profile links —
+  // unlike uids, which nobody types or remembers.
+  async function resolveUsernameToUid(username) {
+    const clean = cleanUsername(username);
+    if (currentUser && clean === emailToUsername(currentUser.email)) return currentUser.uid;
+    const dirQuery = query(collection(db, "directory"), where("username", "==", clean));
+    const snap = await getDocs(dirQuery);
+    return snap.empty ? null : snap.docs[0].id;
+  }
+
+  function setSyncStatus(message, type = "") {
+    const status = document.getElementById("syncStatus");
+    status.textContent = message;
+    status.className = `sync-status ${type}`;
+  }
+
+  function clearProfileListeners() {
+    [unsubDirectory, unsubGoals, unsubDebts, unsubInvestments, unsubExpenses, unsubSchedule]
+      .forEach(unsub => { if (unsub) unsub(); });
+    unsubDirectory = unsubGoals = unsubDebts = unsubInvestments = unsubExpenses = unsubSchedule = null;
+  }
+
+  function stat(value, label, cls = "") {
+    return `<div class="stat"><div class="stat-value ${cls}">${value}</div><div class="stat-label">${label}</div></div>`;
+  }
+
+  function money(n) {
+    const v = Number(n) || 0;
+    return `$${v.toFixed(0)}`;
+  }
+
+  // Latest snapshots for the doc(s) currently being aggregated, so any one
+  // listener firing re-renders combined stats (e.g. net position) with the
+  // freshest data across all five sources.
+  const latest = { goals: null, debts: null, investments: null, expenses: null, schedule: null };
+
+  function renderGoals() {
+    const goals = (latest.goals && latest.goals.goals) || [];
+    const totalTarget = goals.reduce((s, g) => s + (Number(g.targetAmount) || 0), 0);
+    const totalSaved = goals.reduce((s, g) => s + Math.min(Number(g.currentAmount) || 0, Number(g.targetAmount) || 0), 0);
+    const done = goals.filter(g => g.done).length;
+    const active = goals.filter(g => !g.done).length;
+    document.getElementById("goalsStats").innerHTML =
+      stat(money(totalSaved), "Total Saved") +
+      stat(money(totalTarget), "Total Target") +
+      stat(done, "Goals Reached") +
+      stat(active, "Active Goals");
+    renderNetPosition();
+  }
+
+  function renderDebts() {
+    const debts = (latest.debts && latest.debts.debts) || [];
+    const totalOriginal = debts.reduce((s, d) => s + (Number(d.originalAmount) || 0), 0);
+    const totalPaid = debts.reduce((s, d) => s + Math.min(Number(d.paidAmount) || 0, Number(d.originalAmount) || 0), 0);
+    const remaining = Math.max(0, totalOriginal - totalPaid);
+    const payoffPct = totalOriginal > 0 ? (totalPaid / totalOriginal) * 100 : 0;
+    const cleared = debts.filter(d => d.done).length;
+    document.getElementById("debtsStats").innerHTML =
+      stat(money(totalPaid), "Total Paid Off", "positive") +
+      stat(money(remaining), "Remaining Balance", remaining > 0 ? "negative" : "") +
+      stat(`${payoffPct.toFixed(0)}%`, "Payoff Rate") +
+      stat(cleared, "Debts Cleared");
+    renderNetPosition();
+  }
+
+  function renderInvestments() {
+    const investments = (latest.investments && latest.investments.investments) || [];
+    const totalInvested = investments.reduce((s, i) => s + (Number(i.amountInvested) || 0), 0);
+    const totalCurrent = investments.reduce((s, i) => s + (Number(i.currentValue) || 0), 0);
+    const gain = totalCurrent - totalInvested;
+    document.getElementById("investmentsStats").innerHTML =
+      stat(money(totalInvested), "Total Invested") +
+      stat(money(totalCurrent), "Current Value") +
+      stat(`${gain >= 0 ? "+" : "-"}${money(Math.abs(gain))}`, "Total Gain", gain >= 0 ? "positive" : "negative");
+    renderNetPosition();
+  }
+
+  function renderExpenses() {
+    const months = (latest.expenses && latest.expenses.months) || {};
+    let total = 0, count = 0;
+    Object.values(months).forEach(list => {
+      (list || []).forEach(e => { total += Number(e.amount) || 0; count += 1; });
+    });
+    document.getElementById("expensesStats").innerHTML =
+      stat(money(total), "All-Time Spending") +
+      stat(count, "Transactions Logged");
+  }
+
+  function renderSchedule() {
+    const weeks = (latest.schedule && latest.schedule.weeks) || {};
+    let hours = 0, pay = 0, shiftCount = 0;
+    Object.values(weeks).forEach(list => {
+      (list || []).forEach(s => {
+        hours += Number(s.hours) || 0;
+        pay += (Number(s.hours) || 0) * (Number(s.rate) || 0);
+        shiftCount += 1;
+      });
+    });
+    document.getElementById("incomeStats").innerHTML =
+      stat(money(pay), "All-Time Earnings", "positive") +
+      stat(`${hours.toFixed(0)}h`, "Hours Worked") +
+      stat(shiftCount, "Shifts Logged");
+  }
+
+  function renderNetPosition() {
+    const goals = (latest.goals && latest.goals.goals) || [];
+    const savedTowardGoals = goals.reduce((s, g) => s + Math.min(Number(g.currentAmount) || 0, Number(g.targetAmount) || 0), 0);
+    const investments = (latest.investments && latest.investments.investments) || [];
+    const investmentValue = investments.reduce((s, i) => s + (Number(i.currentValue) || 0), 0);
+    const debts = (latest.debts && latest.debts.debts) || [];
+    const debtRemaining = debts.reduce((s, d) => s + Math.max(0, (Number(d.originalAmount) || 0) - (Number(d.paidAmount) || 0)), 0);
+    const net = savedTowardGoals + investmentValue - debtRemaining;
+    const el = document.getElementById("netPositionValue");
+    el.textContent = `${net >= 0 ? "" : "-"}$${Math.abs(net).toFixed(0)}`;
+    el.style.color = net >= 0 ? "var(--success)" : "var(--danger)";
+  }
+
+  function startStatsListeners(uid) {
+    if (unsubGoals) unsubGoals();
+    if (unsubDebts) unsubDebts();
+    if (unsubInvestments) unsubInvestments();
+    if (unsubExpenses) unsubExpenses();
+    if (unsubSchedule) unsubSchedule();
+
+    unsubGoals = onSnapshot(doc(db, "goals", uid), snap => {
+      latest.goals = snap.exists() ? snap.data() : { goals: [] };
+      renderGoals();
+    }, err => console.error("Goals stats listener failed:", err));
+
+    unsubDebts = onSnapshot(doc(db, "debts", uid), snap => {
+      latest.debts = snap.exists() ? snap.data() : { debts: [] };
+      renderDebts();
+    }, err => console.error("Debts stats listener failed:", err));
+
+    unsubInvestments = onSnapshot(doc(db, "investments", uid), snap => {
+      latest.investments = snap.exists() ? snap.data() : { investments: [] };
+      renderInvestments();
+    }, err => console.error("Investments stats listener failed:", err));
+
+    unsubExpenses = onSnapshot(doc(db, "expenses", uid), snap => {
+      latest.expenses = snap.exists() ? snap.data() : { months: {} };
+      renderExpenses();
+    }, err => console.error("Expenses stats listener failed:", err));
+
+    unsubSchedule = onSnapshot(doc(db, "users", uid), snap => {
+      latest.schedule = snap.exists() ? snap.data() : { weeks: {} };
+      renderSchedule();
+    }, err => console.error("Schedule stats listener failed:", err));
+  }
+
+  function stopStatsListeners() {
+    if (unsubGoals) { unsubGoals(); unsubGoals = null; }
+    if (unsubDebts) { unsubDebts(); unsubDebts = null; }
+    if (unsubInvestments) { unsubInvestments(); unsubInvestments = null; }
+    if (unsubExpenses) { unsubExpenses(); unsubExpenses = null; }
+    if (unsubSchedule) { unsubSchedule(); unsubSchedule = null; }
+    latest.goals = latest.debts = latest.investments = latest.expenses = latest.schedule = null;
+  }
+
+  function formatDate(ms) {
+    if (!ms) return null;
+    return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  }
+
+  async function loadProfile() {
+    let uid = currentUser.uid;
+
+    if (requestedUsername) {
+      setSyncStatus("Looking up profile…");
+      uid = await resolveUsernameToUid(requestedUsername);
+      setSyncStatus("");
+      if (!uid) {
+        document.getElementById("profileContent").style.display = "block";
+        document.getElementById("profileUsername").textContent = requestedUsername;
+        document.getElementById("avatarInitial").textContent = "?";
+        document.getElementById("profileMeta").textContent = "—";
+        document.getElementById("youTag").style.display = "none";
+        document.getElementById("visibilityCard").style.display = "none";
+        document.getElementById("statsSections").style.display = "none";
+        document.getElementById("privateCard").style.display = "block";
+        document.getElementById("privateMessage").textContent = `No user found with username "${requestedUsername}".`;
+        return;
+      }
+    }
+
+    profileUid = uid;
+    isOwnProfile = profileUid === currentUser.uid;
+
+    document.getElementById("profileContent").style.display = "block";
+    document.getElementById("youTag").style.display = isOwnProfile ? "inline-block" : "none";
+    document.getElementById("visibilityCard").style.display = isOwnProfile ? "block" : "none";
+    document.getElementById("privateMessage").textContent = "This profile is private.";
+
+    if (isOwnProfile) {
+      document.getElementById("profileLinkInput").value =
+        `${location.origin}/profile.html?u=${encodeURIComponent(emailToUsername(currentUser.email))}`;
+      document.getElementById("pageSubtitle").textContent = "All-time stats across goals, income, debts, and investments.";
+      document.getElementById("privateCard").style.display = "none";
+      document.getElementById("statsSections").style.display = "block";
+      startStatsListeners(profileUid);
+    } else {
+      document.getElementById("pageSubtitle").textContent = "Viewing another user's profile.";
+      // Cross-user stats depend on the owner opting in — gated below once
+      // the directory doc confirms profilePublic, so no stats listeners
+      // start here for someone else's data.
+      document.getElementById("statsSections").style.display = "none";
+      document.getElementById("privateCard").style.display = "block";
+    }
+
+    if (unsubDirectory) unsubDirectory();
+    unsubDirectory = onSnapshot(doc(db, "directory", profileUid), snap => {
+      const data = snap.exists() ? snap.data() : {};
+      const username = data.username || (isOwnProfile ? emailToUsername(currentUser.email) : "Anonymous");
+      document.getElementById("profileUsername").textContent = username;
+      document.getElementById("avatarInitial").textContent = username.charAt(0).toUpperCase() || "?";
+      document.getElementById("profileMeta").textContent =
+        data.updatedAt ? `Last active ${formatDate(data.updatedAt)}` : "—";
+
+      const isPublic = data.profilePublic === true;
+
+      if (isOwnProfile) {
+        document.getElementById("publicToggle").checked = isPublic;
+      } else if (isPublic) {
+        document.getElementById("privateCard").style.display = "none";
+        document.getElementById("statsSections").style.display = "block";
+        startStatsListeners(profileUid);
+      } else {
+        document.getElementById("privateCard").style.display = "block";
+        document.getElementById("statsSections").style.display = "none";
+        stopStatsListeners();
+      }
+    }, err => {
+      console.error("Directory listener failed:", err);
+      if (!isOwnProfile) {
+        document.getElementById("privateMessage").textContent = "This profile is private or doesn't exist.";
+      }
+    });
+  }
+
+  async function setProfilePublic(isPublic) {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, "directory", currentUser.uid), {
+        profilePublic: isPublic,
+        updatedAt: Date.now()
+      }, { merge: true });
+      showToast(isPublic ? "Profile is now public ✓" : "Profile is now private ✓");
+    } catch (e) {
+      console.error("Could not update profile visibility:", e);
+      showToast("Could not save — check Firestore rules");
+      document.getElementById("publicToggle").checked = !isPublic;
+    }
+  }
+
+  async function copyProfileLink() {
+    const input = document.getElementById("profileLinkInput");
+    try {
+      await navigator.clipboard.writeText(input.value);
+      showToast("Profile link copied ✓");
+    } catch (e) {
+      input.select();
+      showToast("Select and copy the link above");
+    }
+  }
+
+  async function handleAuth() {
+    const username = document.getElementById("authUsername").value.trim();
+    const password = document.getElementById("authPassword").value;
+    if (!username || !password) { showToast("Enter a username and password"); return; }
+    if (username.length < 3) { showToast("Username must be at least 3 characters"); return; }
+    const email = usernameToEmail(username);
+    try {
+      if (isSignUpMode) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast("Account created!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Welcome back!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const code = error.code || "";
+      let message = "Could not sign in.";
+      if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+        message = "Invalid username or password";
+      } else if (code === "auth/email-already-in-use") {
+        message = "Username already taken";
+      } else if (code === "auth/weak-password") {
+        message = "Password must be at least 6 characters";
+      }
+      showToast(message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      clearProfileListeners();
+      await signOut(auth);
+      currentUser = null;
+      showToast("Logged out");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to log out");
+    }
+  }
+
+  function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+    const title = document.getElementById("authTitle");
+    const button = document.getElementById("authBtn");
+    const toggle = document.getElementById("authToggle");
+    if (isSignUpMode) {
+      title.textContent = "Create an account";
+      button.textContent = "Sign Up";
+      toggle.textContent = "Already have an account? Sign in";
+    } else {
+      title.textContent = "Sign in to view profiles";
+      button.textContent = "Login";
+      toggle.textContent = "Don't have an account? Sign up";
+    }
+  }
+
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    const loggedOutForm = document.getElementById("loggedOutForm");
+    const loggedInView = document.getElementById("loggedInView");
+    const profileContent = document.getElementById("profileContent");
+
+    clearProfileListeners();
+
+    if (user) {
+      loggedOutForm.style.display = "none";
+      loggedInView.style.display = "block";
+      document.getElementById("userDisplay").textContent = emailToUsername(user.email);
+      applyTimeBasedGreeting();
+      setSyncStatus("");
+      registerInDirectory(user);
+      initFriendsDropdown(user.uid, emailToUsername(user.email));
+      loadProfile();
+      return;
+    }
+
+    loggedOutForm.style.display = "block";
+    loggedInView.style.display = "none";
+    profileContent.style.display = "none";
+    teardownFriendsDropdown();
+    setSyncStatus("Sign in to view profiles.");
+  });
+
+  window.handleAuth = handleAuth;
+  window.handleLogout = handleLogout;
+  window.toggleAuthMode = toggleAuthMode;
+  window.setProfilePublic = setProfilePublic;
+  window.copyProfileLink = copyProfileLink;
+</script>
+
+</body>
+</html>

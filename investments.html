@@ -4,66 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Investments</title>
+<link rel="stylesheet" href="./shared/base.css">
 
 <style>
-  :root {
-    --bg: #0f1115;
-    --card: #1a1d24;
-    --card-hover: #21252e;
-    --accent: #ff8a3d;
-    --accent-soft: #3a2a1e;
-    --text: #eceef2;
-    --text-dim: #9aa0ab;
-    --border: #2a2e38;
-    --danger: #e5484d;
-    --success: #4ade80;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0 auto; max-width: 720px; padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text);
-  }
-  h1 { margin: 0 0 4px; font-size: 22px; }
-  .subtitle { margin-bottom: 8px; color: var(--text-dim); font-size: 14px; }
-  .dashboard-link { display: inline-block; margin-bottom: 16px; color: var(--accent); font-size: 13px; text-decoration: none; }
-  .dashboard-link:hover { text-decoration: underline; }
-  .sync-status { min-height: 18px; margin-bottom: 14px; color: var(--text-dim); font-size: 12px; }
-  .sync-status.success { color: var(--success); }
-  .sync-status.error { color: #ff8a8f; }
-  .storage-warning {
-    display: none; margin-bottom: 16px; padding: 12px 14px;
-    border: 1px solid var(--danger); border-radius: 10px;
-    background: rgba(229, 72, 77, 0.15); color: #ff8a8f; font-size: 13px; line-height: 1.4;
-  }
-  .storage-warning.show { display: block; }
-  .card, .auth-card {
-    margin-bottom: 16px; padding: 16px; border: 1px solid var(--border);
-    border-radius: 12px; background: var(--card);
-  }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .form-row.full { grid-template-columns: 1fr; }
-  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 12px; }
   input, select {
     width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     outline: none; background: #12141a; color: var(--text); font-size: 14px;
   }
   input:focus, select:focus { border-color: var(--accent); }
-  button {
-    width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
-    background: var(--accent); color: #1a1005; cursor: pointer; font-size: 14px; font-weight: 600;
-  }
-  button:hover { opacity: 0.9; }
-  button.secondary {
-    width: auto; border: 1px solid var(--border); background: transparent; color: var(--text-dim);
-  }
-  .auth-header { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; font-weight: 600; }
-  .auth-link {
-    display: block; margin-top: 10px; color: var(--accent); cursor: pointer;
-    font-size: 12px; text-align: center; text-decoration: underline;
-  }
-  .auth-user-info { color: var(--text); font-size: 13px; }
-  .auth-user-info span { color: var(--accent); font-weight: 600; }
   .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat { padding: 12px; border-radius: 8px; background: #12141a; text-align: center; }
   .stat-value { color: var(--accent); font-size: 20px; font-weight: 700; }
@@ -95,14 +44,6 @@
   .streak-title { color: var(--text-dim); font-size: 13px; letter-spacing: .5px; text-transform: uppercase; margin-bottom: 4px; }
   .streak-value { color: var(--accent); font-size: 26px; font-weight: 700; }
   .streak-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
-
-  .toast {
-    position: fixed; z-index: 9999; bottom: 20px; left: 50%; padding: 10px 18px;
-    border: 1px solid var(--accent); border-radius: 20px; background: var(--card);
-    font-size: 13px; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity 0.3s;
-  }
-  .toast.show { opacity: 1; }
-  @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
 </style>
 </head>
 
@@ -120,39 +61,53 @@
   Use a normal browser tab instead of private/incognito mode.
 </div>
 
-<div class="auth-card">
-  <div id="loggedOutForm">
-    <div class="auth-header" id="authTitle">Sign in to sync your investments</div>
-    <div class="form-row">
-      <div>
-        <label for="authUsername">Username</label>
-        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
-      </div>
-      <div>
-        <label for="authPassword">Password</label>
-        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
-      </div>
+<div class="auth-card" id="loggedOutForm">
+  <div class="auth-header" id="authTitle">Sign in to sync your investments</div>
+  <div class="form-row">
+    <div>
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
     </div>
-    <div style="margin-top:12px;">
-      <button id="authBtn" onclick="handleAuth()">Login</button>
+    <div>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
   </div>
-  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
-    <div class="auth-user-info">Cloud synced: <span id="userDisplay"></span></div>
-    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">Logout</button>
+  <div style="margin-top:12px;">
+    <button id="authBtn" onclick="handleAuth()">Login</button>
+  </div>
+  <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+</div>
+
+<div class="welcome-banner" id="loggedInView" style="display:none;">
+  <div class="welcome-banner-row">
+    <div>
+      <div class="welcome-title">
+        <span id="greetingWord">Welcome back</span>, <span id="userDisplay"></span>! <span id="greetingEmoji">👋</span>
+      </div>
+      <div class="welcome-sub">Your investments sync automatically.</div>
+    </div>
+    <div class="welcome-actions">
+      <div id="friendsDropdownRoot"></div>
+      <button class="secondary" onclick="location.href='/profile.html'" style="padding:6px 12px; font-size:12px; width:auto;">Profile</button>
+      <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px; width:auto;">Logout</button>
+    </div>
   </div>
 </div>
 
 <div class="card">
   <div class="form-row">
-    <div>
+    <div id="invNameRow" style="display:none;">
       <label for="invName">Name</label>
-      <input id="invName" placeholder="e.g. Roth IRA, Bitcoin, Savings">
+      <input id="invName" placeholder="e.g. Roth IRA, Savings">
+    </div>
+    <div id="invAssetRow">
+      <label for="invAsset">Asset</label>
+      <select id="invAsset"></select>
     </div>
     <div>
       <label for="invType">Type</label>
-      <select id="invType">
+      <select id="invType" onchange="onTypeChange()">
         <option>Stocks</option>
         <option>Crypto</option>
         <option>Retirement (401k/IRA)</option>
@@ -167,9 +122,13 @@
       <label for="invInvested">Amount invested ($)</label>
       <input id="invInvested" type="number" min="0" step="0.01" placeholder="e.g. 500">
     </div>
-    <div>
+    <div id="invCurrentRow" style="display:none;">
       <label for="invCurrent">Current value ($)</label>
       <input id="invCurrent" type="number" min="0" step="0.01" placeholder="e.g. 540">
+    </div>
+    <div id="invQuantityRow">
+      <label for="invQuantity">Quantity held</label>
+      <input id="invQuantity" type="number" min="0" step="any" placeholder="e.g. 0.25">
     </div>
   </div>
   <button onclick="addInvestment()">+ Add Investment</button>
@@ -193,37 +152,40 @@
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
   import {
-    getAuth,
+    auth,
+    db,
+    emailToUsername,
+    usernameToEmail,
+    escapeHtml,
+    registerInDirectory,
+    showToast,
+    applyTimeBasedGreeting
+  } from "./shared/firebase.js";
+  import {
+    initFriendsDropdown,
+    teardownFriendsDropdown
+  } from "./shared/notifications.js";
+  import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import {
-    getFirestore,
     doc,
     setDoc,
     onSnapshot
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
-    authDomain: "scheduler-609b0.firebaseapp.com",
-    projectId: "scheduler-609b0",
-    storageBucket: "scheduler-609b0.firebasestorage.app",
-    messagingSenderId: "151764758872",
-    appId: "1:151764758872:web:4382212aaa6e870395b52d",
-    measurementId: "G-MX8DN7YLB2"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  try { getAnalytics(app); } catch (e) { console.warn("Analytics bypassed.", e); }
-
-  const auth = getAuth(app);
-  const db = getFirestore(app);
+  import {
+    CRYPTO_ASSETS,
+    STOCK_ASSETS,
+    ALL_ASSETS,
+    getSharedPrices,
+    isLiveLinked,
+    liveValueFor,
+    dailyChangeFor
+  } from "./shared/market.js";
 
   const STORAGE_KEY = "benjamin-investments-tracker-data";
 
@@ -234,42 +196,15 @@
 
   let data = { investments: [] };
 
-  function usernameToEmail(username) {
-    const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
-    return `${clean}@scheduler.app`;
-  }
-  function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
-
-  // Registers this user in the shared directory on login, so admins can
-  // find and grant/hide anyone — not just people who've saved an investment.
-  async function registerInDirectory(user) {
-    try {
-      await setDoc(doc(db, "directory", user.uid), {
-        username: emailToUsername(user.email),
-        updatedAt: Date.now()
-      }, { merge: true });
-    } catch (e) {
-      console.error("Could not register in directory:", e);
-    }
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
+  // symbol -> { usd, change24h } — only fetched/polled while at least one
+  // investment is live-linked to a coin (added or linked from the Crypto page).
+  let livePrices = {};
+  let priceIntervalId = null;
 
   function setSyncStatus(message, type = "") {
     const status = document.getElementById("syncStatus");
     status.textContent = message;
     status.className = `sync-status ${type}`;
-  }
-
-  function showToast(message) {
-    const toast = document.getElementById("toast");
-    toast.textContent = message;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1800);
   }
 
   async function checkStorage() {
@@ -348,16 +283,99 @@
         setSyncStatus("Ready to save investments to Firebase.", "success");
       }
       render();
+      ensurePricePolling();
     }, error => {
       console.error("Investments listener failed:", error);
       setSyncStatus("Firebase cannot load investments. Check Firestore rules.", "error");
     });
   }
 
-  async function addInvestment() {
-    const name = document.getElementById("invName").value.trim();
+  // Live prices only matter once something is actually linked to an asset,
+  // so polling starts/stops with whether any entry currently needs it.
+  async function pollPrices() {
+    try {
+      livePrices = await getSharedPrices();
+    } catch (e) {
+      console.error("Could not fetch live market prices:", e);
+    }
+    render();
+  }
+
+  function onTypeChange() {
     const type = document.getElementById("invType").value;
-    const invested = parseFloat(document.getElementById("invInvested").value);
+    const isAsset = type === "Crypto" || type === "Stocks";
+    document.getElementById("invNameRow").style.display = isAsset ? "none" : "block";
+    document.getElementById("invAssetRow").style.display = isAsset ? "block" : "none";
+    document.getElementById("invCurrentRow").style.display = isAsset ? "none" : "block";
+    document.getElementById("invQuantityRow").style.display = isAsset ? "block" : "none";
+
+    if (isAsset) {
+      const assets = type === "Crypto" ? CRYPTO_ASSETS : STOCK_ASSETS;
+      document.getElementById("invAsset").innerHTML =
+        assets.map(a => `<option value="${a.symbol}">${a.emoji} ${a.name} (${a.symbol})</option>`).join("");
+    }
+  }
+
+  function ensurePricePolling() {
+    const needsPolling = (data.investments || []).some(isLiveLinked);
+    if (needsPolling && !priceIntervalId) {
+      pollPrices();
+      priceIntervalId = setInterval(pollPrices, 60 * 1000);
+    } else if (!needsPolling && priceIntervalId) {
+      clearInterval(priceIntervalId);
+      priceIntervalId = null;
+    }
+  }
+
+  function stopPricePolling() {
+    if (priceIntervalId) { clearInterval(priceIntervalId); priceIntervalId = null; }
+  }
+
+  // Live value when a price has loaded for this holding's coin, otherwise
+  // whatever was last saved.
+  function displayValue(inv) {
+    const live = liveValueFor(inv, livePrices);
+    return live != null ? live : (Number(inv.currentValue) || 0);
+  }
+
+  async function addInvestment() {
+    const type = document.getElementById("invType").value;
+    const isAsset = type === "Crypto" || type === "Stocks";
+    const investedInput = document.getElementById("invInvested").value;
+    const invested = investedInput ? parseFloat(investedInput) : 0;
+
+    if (isAsset) {
+      const symbol = document.getElementById("invAsset").value;
+      const quantity = parseFloat(document.getElementById("invQuantity").value);
+      if (isNaN(quantity) || quantity <= 0) {
+        showToast("Enter a valid quantity");
+        return;
+      }
+      const asset = ALL_ASSETS.find(a => a.symbol === symbol);
+      const price = livePrices[symbol] ? livePrices[symbol].usd : null;
+      const currentValue = price != null ? quantity * price : (isNaN(invested) ? 0 : invested);
+
+      data.investments.push({
+        id: Date.now(),
+        name: asset.name,
+        type,
+        symbol,
+        quantity,
+        amountInvested: isNaN(invested) ? 0 : invested,
+        currentValue,
+        contributions: []
+      });
+
+      await saveData();
+      document.getElementById("invQuantity").value = "";
+      document.getElementById("invInvested").value = "";
+      render();
+      ensurePricePolling();
+      showToast(`${asset.name} holding added ✓`);
+      return;
+    }
+
+    const name = document.getElementById("invName").value.trim();
     const currentInput = document.getElementById("invCurrent").value;
     const current = currentInput ? parseFloat(currentInput) : invested;
 
@@ -381,6 +399,51 @@
     document.getElementById("invCurrent").value = "";
     render();
     showToast("Investment added ✓");
+  }
+
+  async function linkExistingHolding(id) {
+    const select = document.getElementById(`link-asset-${id}`);
+    const qtyInput = document.getElementById(`link-qty-${id}`);
+    const symbol = select.value;
+    const quantity = parseFloat(qtyInput.value);
+
+    if (isNaN(quantity) || quantity <= 0) {
+      showToast("Enter a valid quantity");
+      return;
+    }
+
+    const inv = data.investments.find(i => i.id === id);
+    if (!inv) return;
+
+    const price = livePrices[symbol] ? livePrices[symbol].usd : null;
+    inv.symbol = symbol;
+    inv.quantity = quantity;
+    if (price != null) inv.currentValue = quantity * price;
+
+    await saveData();
+    render();
+    ensurePricePolling();
+    showToast("Live pricing linked ✓");
+  }
+
+  async function editQuantity(id) {
+    const input = document.getElementById(`qty-${id}`);
+    const quantity = parseFloat(input.value);
+    if (isNaN(quantity) || quantity < 0) {
+      showToast("Enter a valid quantity");
+      return;
+    }
+    const inv = data.investments.find(i => i.id === id);
+    if (!inv) return;
+
+    inv.quantity = quantity;
+    const price = livePrices[inv.symbol] ? livePrices[inv.symbol].usd : null;
+    if (price != null) inv.currentValue = quantity * price;
+
+    await saveData();
+    input.value = "";
+    render();
+    showToast("Quantity updated ✓");
   }
 
   async function logContribution(id) {
@@ -523,7 +586,7 @@
     renderStreak();
     const investments = data.investments || [];
     const totalInvested = investments.reduce((s, i) => s + (Number(i.amountInvested) || 0), 0);
-    const totalCurrent = investments.reduce((s, i) => s + (Number(i.currentValue) || 0), 0);
+    const totalCurrent = investments.reduce((s, i) => s + displayValue(i), 0);
     const totalGain = totalCurrent - totalInvested;
     const gainPct = totalInvested > 0 ? (totalGain / totalInvested) * 100 : 0;
 
@@ -557,17 +620,56 @@
     }
 
     listEl.innerHTML = investments.map(inv => {
-      const gain = (Number(inv.currentValue) || 0) - (Number(inv.amountInvested) || 0);
+      const currentVal = displayValue(inv);
+      const gain = currentVal - (Number(inv.amountInvested) || 0);
       const gainPctItem = inv.amountInvested > 0 ? (gain / inv.amountInvested) * 100 : 0;
+      const live = isLiveLinked(inv);
+      const linkable = !live && (inv.type === "Crypto" || inv.type === "Stocks");
+      const priceInfo = live ? livePrices[inv.symbol] : null;
+      const todayChange = live ? dailyChangeFor(inv, livePrices) : null;
+      const assetOptions = inv.type === "Crypto" ? CRYPTO_ASSETS : STOCK_ASSETS;
+
+      let controlHtml;
+      if (live) {
+        controlHtml = `
+          <div style="margin-top:6px; display:flex; gap:6px;">
+            <input id="qty-${inv.id}" type="number" min="0" step="any" placeholder="Update quantity" style="font-size:12px; padding:6px 8px;">
+            <button class="secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="editQuantity(${inv.id})">Update</button>
+          </div>
+        `;
+      } else if (linkable) {
+        controlHtml = `
+          <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+            <select id="link-asset-${inv.id}" style="width:auto;">
+              ${assetOptions.map(a => `<option value="${a.symbol}">${a.emoji} ${a.name} (${a.symbol})</option>`).join("")}
+            </select>
+            <input id="link-qty-${inv.id}" type="number" min="0" step="any" placeholder="Quantity held" style="width:120px; font-size:12px; padding:6px 8px;">
+            <button style="width:auto; padding:6px 10px; font-size:12px;" onclick="linkExistingHolding(${inv.id})">Link Live Pricing</button>
+          </div>
+        `;
+      } else {
+        controlHtml = `
+          <div style="margin-top:6px; display:flex; gap:6px;">
+            <input id="update-${inv.id}" type="number" min="0" step="0.01" placeholder="Update value" style="font-size:12px; padding:6px 8px;">
+            <button class="secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="updateValue(${inv.id})">Update</button>
+          </div>
+        `;
+      }
+
       return `
         <div class="inv-row">
           <div class="inv-info">
             <div class="inv-name">${typeEmoji(inv.type)} ${escapeHtml(inv.name)}</div>
-            <div class="inv-type">${escapeHtml(inv.type)} · Invested $${(Number(inv.amountInvested) || 0).toFixed(2)}</div>
-            <div style="margin-top:6px; display:flex; gap:6px;">
-              <input id="update-${inv.id}" type="number" min="0" step="0.01" placeholder="Update value" style="font-size:12px; padding:6px 8px;">
-              <button class="secondary" style="width:auto; padding:6px 10px; font-size:12px;" onclick="updateValue(${inv.id})">Update</button>
+            <div class="inv-type">
+              ${escapeHtml(inv.type)}${live ? ` · ${inv.quantity} ${inv.symbol}` : ""} · Invested $${(Number(inv.amountInvested) || 0).toFixed(2)}
             </div>
+            ${live && priceInfo ? `
+              <div style="margin-top:4px; color:var(--text-dim); font-size:11px;">
+                🔴 Live · $${priceInfo.usd.toLocaleString(undefined, { maximumFractionDigits: priceInfo.usd < 1 ? 4 : 2 })}/${inv.symbol}
+              </div>
+            ` : ""}
+            ${linkable ? `<div style="margin-top:4px; color:var(--text-dim); font-size:11px;">Link this to live pricing:</div>` : ""}
+            ${controlHtml}
             <div style="margin-top:6px; display:flex; gap:6px;">
               <input id="contrib-${inv.id}" type="number" min="0.01" step="0.01" placeholder="Log contribution $" style="font-size:12px; padding:6px 8px;">
               <button style="width:auto; padding:6px 10px; font-size:12px;" onclick="logContribution(${inv.id})">🔥 Log</button>
@@ -575,7 +677,10 @@
             <div style="margin-top:4px; color:var(--text-dim); font-size:11px;">${(inv.contributions || []).length} contribution${(inv.contributions || []).length === 1 ? "" : "s"} logged</div>
           </div>
           <div class="inv-values">
-            <div class="inv-current">$${(Number(inv.currentValue) || 0).toFixed(2)}</div>
+            <div class="inv-current">$${currentVal.toFixed(2)}</div>
+            ${todayChange != null
+              ? `<div class="inv-gain ${todayChange >= 0 ? "positive" : "negative"}" style="font-size:11px;">${todayChange >= 0 ? "+" : "-"}$${Math.abs(todayChange).toFixed(2)} today</div>`
+              : ""}
             <div class="inv-gain ${gain >= 0 ? "positive" : "negative"}">
               ${gain >= 0 ? "+" : "-"}$${Math.abs(gain).toFixed(2)} (${gainPctItem >= 0 ? "+" : ""}${gainPctItem.toFixed(1)}%)
             </div>
@@ -618,6 +723,7 @@
   async function handleLogout() {
     try {
       if (unsubscribeInvestments) { unsubscribeInvestments(); unsubscribeInvestments = null; }
+      stopPricePolling();
       await signOut(auth);
       currentUser = null;
       loadLocalData();
@@ -654,17 +760,21 @@
 
     if (user) {
       loggedOutForm.style.display = "none";
-      loggedInView.style.display = "flex";
+      loggedInView.style.display = "block";
       userDisplay.textContent = emailToUsername(user.email);
+      applyTimeBasedGreeting();
       loadLocalData();
       startInvestmentsListener();
       registerInDirectory(user);
+      initFriendsDropdown(user.uid, emailToUsername(user.email));
       render();
       return;
     }
 
     loggedOutForm.style.display = "block";
     loggedInView.style.display = "none";
+    stopPricePolling();
+    teardownFriendsDropdown();
     loadLocalData();
     setSyncStatus("Sign in to sync investments to Firebase.");
     render();
@@ -677,8 +787,12 @@
   window.updateValue = updateValue;
   window.deleteInvestment = deleteInvestment;
   window.logContribution = logContribution;
+  window.linkExistingHolding = linkExistingHolding;
+  window.editQuantity = editQuantity;
+  window.onTypeChange = onTypeChange;
 
   (async () => {
+    onTypeChange();
     await checkStorage();
     loadLocalData();
     render();

@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Friends</title>
+<link rel="stylesheet" href="./shared/base.css">
+
+<style>
+  .welcome-banner { margin-bottom: 16px; padding: 20px; border: 1px solid var(--accent); border-radius: 12px; background: linear-gradient(135deg, var(--accent-soft), var(--card)); }
+
+  .hero-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .hero-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .welcome-title { margin-bottom: 4px; color: var(--accent); font-size: 18px; font-weight: 700; }
+  .welcome-sub { color: var(--text-dim); font-size: 13px; }
+
+  .avatar-circle {
+    position: relative; display: flex; align-items: center; justify-content: center; border-radius: 50%;
+    font-weight: 700; flex: none; letter-spacing: -0.5px;
+  }
+  .hero-avatar { width: 50px; height: 50px; font-size: 17px; background: var(--accent-soft); color: var(--accent); }
+  .row-avatar { width: 38px; height: 38px; font-size: 13px; }
+
+  /* A Rocket League-style presence dot — reinterpreted honestly for what
+     this app actually has: green means this friend's schedule is
+     published and viewable right now, not "online". */
+  .status-dot {
+    position: absolute; bottom: -1px; right: -1px; width: 12px; height: 12px;
+    border-radius: 50%; border: 2px solid #12141a; background: var(--text-dim);
+  }
+  .status-dot.online { background: var(--success); }
+
+  .hero-stats { display: flex; gap: 10px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .hero-stat { flex: 1; text-align: center; }
+  .hero-stat-value { color: var(--accent); font-size: 20px; font-weight: 700; }
+  .hero-stat-label { margin-top: 2px; color: var(--text-dim); font-size: 11px; }
+
+  .search-card { padding: 10px 12px; }
+  .search-wrap { position: relative; }
+  .search-wrap input { padding-left: 34px; margin: 0; }
+  .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); font-size: 13px; opacity: 0.45; pointer-events: none; }
+
+  .tab-nav { display: flex; gap: 8px; }
+  .tab-nav button { flex: 1; position: relative; }
+  button.active { border-color: var(--accent); background: var(--accent); color: #1a1005; }
+  .tab-badge {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 16px; height: 16px;
+    margin-left: 6px; padding: 0 4px; border-radius: 10px; background: var(--danger); color: #fff;
+    font-size: 10px; font-weight: 700; vertical-align: middle;
+  }
+
+  .section-heading { margin: 20px 0 10px; font-size: 14px; font-weight: 700; color: var(--text); }
+
+  .empty-state { padding: 34px 10px; color: var(--text-dim); font-size: 13px; text-align: center; }
+  .empty-state .icon { display: block; margin-bottom: 8px; font-size: 28px; }
+
+  .friend-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    margin-bottom: 8px; padding: 12px 14px; border-radius: 10px;
+    background: #12141a; border-left: 3px solid var(--accent);
+  }
+  .friend-row.pending { border-left-color: var(--text-dim); }
+  .friend-row-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .friend-name { font-weight: 600; font-size: 14px; }
+  .friend-sub { color: var(--text-dim); font-size: 12px; margin-top: 2px; }
+  .friend-actions { display: flex; gap: 6px; flex-shrink: 0; }
+
+  /* Compact circular icon actions, Rocket League party-list style, instead
+     of full-width text buttons on every row. */
+  .friend-actions .icon-btn {
+    display: flex; align-items: center; justify-content: center;
+    width: 32px; height: 32px; padding: 0; border-radius: 50%; flex: none;
+    border: 1px solid var(--border); background: transparent; color: var(--text);
+    font-size: 14px; text-decoration: none; cursor: pointer;
+  }
+  .friend-actions .icon-btn:hover { border-color: var(--accent); }
+  .friend-actions .icon-btn.accept { color: var(--success); }
+  .friend-actions .icon-btn.accept:hover { border-color: var(--success); }
+  .friend-actions .icon-btn.danger { color: var(--danger); }
+  .friend-actions .icon-btn.danger:hover { border-color: var(--danger); }
+
+  .notif-row {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 8px; padding: 10px 14px; border-radius: 8px; background: #12141a;
+    border-left: 3px solid var(--border); font-size: 13px; color: var(--text);
+  }
+  .notif-row.unread { border-left-color: var(--accent); background: var(--accent-soft); }
+  .notif-row-icon { font-size: 16px; flex: none; line-height: 1.3; }
+  .notif-row-time { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+</style>
+</head>
+
+<body>
+
+<h1>👥 Friends</h1>
+<div class="subtitle">Your circle, requests, and notifications.</div>
+
+<a href="/" class="dashboard-link">← Back to Dashboard</a>
+
+<div class="sync-status" id="syncStatus"></div>
+
+<div class="auth-card" id="loggedOutForm">
+  <div class="auth-header" id="authTitle">Sign in to manage friends</div>
+  <div class="form-row">
+    <div>
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
+    </div>
+    <div>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
+    </div>
+  </div>
+  <div style="margin-top:12px;">
+    <button id="authBtn" onclick="handleAuth()">Login</button>
+  </div>
+  <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+</div>
+
+<div class="welcome-banner" id="loggedInView" style="display:none;">
+  <div class="hero-top">
+    <div class="hero-left">
+      <div class="avatar-circle hero-avatar" id="heroAvatar">?</div>
+      <div>
+        <div class="welcome-title">
+          <span id="greetingWord">Welcome back</span>, <span id="userDisplay"></span>! <span id="greetingEmoji">👋</span>
+        </div>
+        <div class="welcome-sub">Friends see your published schedule — never dollar amounts.</div>
+      </div>
+    </div>
+    <div class="welcome-actions">
+      <button class="secondary" onclick="location.href='/profile.html'" style="padding:6px 12px; font-size:12px; width:auto;">Profile</button>
+      <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px; width:auto;">Logout</button>
+    </div>
+  </div>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="hero-stat-value" id="statFriendCount">0</div><div class="hero-stat-label">Friends</div></div>
+    <div class="hero-stat"><div class="hero-stat-value" id="statPublishedCount">0</div><div class="hero-stat-label">Published</div></div>
+    <div class="hero-stat"><div class="hero-stat-value" id="statPendingCount">0</div><div class="hero-stat-label">Awaiting You</div></div>
+  </div>
+</div>
+
+<div id="friendsContent" style="display:none;">
+
+  <div class="card">
+    <div class="form-row">
+      <div>
+        <label for="friendUsername">Add a friend</label>
+        <input id="friendUsername" placeholder="e.g. taylor">
+      </div>
+      <div></div>
+    </div>
+    <button onclick="sendFriendRequest()">+ Send Friend Request</button>
+  </div>
+
+  <div class="card">
+    <div class="tab-nav">
+      <button class="secondary active" id="tabFriendsBtn" onclick="setTab('friends')">🤝 Friends</button>
+      <button class="secondary" id="tabRequestsBtn" onclick="setTab('requests')">
+        📥 Requests<span class="tab-badge" id="requestsBadge" style="display:none;"></span>
+      </button>
+      <button class="secondary" id="tabNotifsBtn" onclick="setTab('notifications')">
+        🔔 Notifications<span class="tab-badge" id="notifsBadge" style="display:none;"></span>
+      </button>
+    </div>
+  </div>
+
+  <div id="friendsTab">
+    <div class="card search-card">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="friendSearch" placeholder="Search friends…" oninput="renderFriends()">
+      </div>
+    </div>
+    <div id="friendsList"></div>
+  </div>
+
+  <div id="requestsTab" style="display:none;">
+    <div class="section-heading">📥 Incoming</div>
+    <div id="incomingRequestsList"></div>
+    <div class="section-heading">📤 Outgoing</div>
+    <div id="outgoingRequestsList"></div>
+  </div>
+
+  <div id="notificationsTab" style="display:none;">
+    <button class="secondary" onclick="clearAllNotifications()" style="width:auto; padding:8px 14px; font-size:13px; margin-bottom:10px;">Clear All</button>
+    <div id="notificationsList"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+  import {
+    auth,
+    db,
+    emailToUsername,
+    usernameToEmail,
+    escapeHtml,
+    registerInDirectory,
+    showToast,
+    applyTimeBasedGreeting
+  } from "./shared/firebase.js";
+  import {
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
+    signOut,
+    onAuthStateChanged
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+  import {
+    doc,
+    setDoc,
+    updateDoc,
+    deleteDoc,
+    onSnapshot,
+    collection,
+    query,
+    where,
+    getDoc,
+    getDocs
+  } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+  import {
+    friendDocId,
+    sendNotification
+  } from "./shared/notifications.js";
+
+  const AVATAR_COLORS = ["#ff8a3d", "#4ade80", "#60a5fa", "#f472b6", "#a78bfa", "#fbbf24", "#34d399", "#f87171"];
+
+  function avatarColorFor(name) {
+    let hash = 0;
+    for (const ch of String(name)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
+    return AVATAR_COLORS[hash % AVATAR_COLORS.length];
+  }
+
+  function initialsFor(name) {
+    return String(name || "?").slice(0, 2).toUpperCase();
+  }
+
+  const NOTIF_ICONS = { friend_request: "👋", friend_accepted: "🎉" };
+
+  let currentUser = null;
+  let isSignUpMode = false;
+  let activeTab = "friends";
+
+  let outgoingRequests = [];
+  let incomingRequests = [];
+  let friends = [];
+  let notifications = [];
+  let publishedStatus = new Map();
+
+  let unsubFrom = null;
+  let unsubTo = null;
+  let unsubNotifications = null;
+
+  function setSyncStatus(message, type = "") {
+    const status = document.getElementById("syncStatus");
+    status.textContent = message;
+    status.className = `sync-status ${type}`;
+  }
+
+  function otherPartyInfo(req) {
+    const isFromMe = req.from === currentUser.uid;
+    return {
+      uid: isFromMe ? req.to : req.from,
+      username: isFromMe ? (req.toUsername || "User") : (req.fromUsername || "User")
+    };
+  }
+
+  function updateHeroStats() {
+    document.getElementById("statFriendCount").textContent = friends.length;
+    document.getElementById("statPublishedCount").textContent =
+      friends.filter(req => publishedStatus.get(otherPartyInfo(req).uid) === true).length;
+    document.getElementById("statPendingCount").textContent = incomingRequests.length;
+  }
+
+  // Each friend's users/{uid} doc is blanket-readable to any signed-in
+  // user (same rule the leaderboard already relies on), so a plain getDoc
+  // per friend is enough to know whether their schedule is publicly
+  // viewable right now — the "online" signal for our status dots.
+  async function refreshPublishedStatus() {
+    const results = await Promise.all(friends.map(async req => {
+      const other = otherPartyInfo(req);
+      try {
+        const snap = await getDoc(doc(db, "users", other.uid));
+        return [other.uid, snap.exists() && snap.data().published === true];
+      } catch (e) {
+        console.error("Could not check published status:", e);
+        return [other.uid, false];
+      }
+    }));
+    publishedStatus = new Map(results);
+    renderFriends();
+    updateHeroStats();
+  }
+
+  function updateTabBadges() {
+    const requestsBadge = document.getElementById("requestsBadge");
+    if (incomingRequests.length > 0) {
+      requestsBadge.textContent = incomingRequests.length > 9 ? "9+" : String(incomingRequests.length);
+      requestsBadge.style.display = "inline-flex";
+    } else {
+      requestsBadge.style.display = "none";
+    }
+
+    const notifsBadge = document.getElementById("notifsBadge");
+    const unread = notifications.filter(n => !n.read).length;
+    if (unread > 0) {
+      notifsBadge.textContent = unread > 9 ? "9+" : String(unread);
+      notifsBadge.style.display = "inline-flex";
+    } else {
+      notifsBadge.style.display = "none";
+    }
+  }
+
+  function startFriendListeners() {
+    if (!currentUser) return;
+    if (unsubFrom) { unsubFrom(); unsubFrom = null; }
+    if (unsubTo) { unsubTo(); unsubTo = null; }
+
+    const myUid = currentUser.uid;
+    let fromDocs = [];
+    let toDocs = [];
+
+    function recompute() {
+      const byId = new Map();
+      [...fromDocs, ...toDocs].forEach(d => byId.set(d.id, d));
+      const merged = [...byId.values()];
+
+      outgoingRequests = merged.filter(r => r.status === "pending" && r.from === myUid);
+      incomingRequests = merged.filter(r => r.status === "pending" && r.to === myUid);
+      friends = merged.filter(r => r.status === "accepted");
+
+      renderIncoming();
+      renderOutgoing();
+      renderFriends();
+      updateHeroStats();
+      updateTabBadges();
+      refreshPublishedStatus();
+    }
+
+    unsubFrom = onSnapshot(
+      query(collection(db, "friendRequests"), where("from", "==", myUid)),
+      snapshot => {
+        fromDocs = [];
+        snapshot.forEach(d => fromDocs.push({ id: d.id, ...d.data() }));
+        recompute();
+      },
+      error => console.error("friendRequests(from) listener failed:", error)
+    );
+
+    unsubTo = onSnapshot(
+      query(collection(db, "friendRequests"), where("to", "==", myUid)),
+      snapshot => {
+        toDocs = [];
+        snapshot.forEach(d => toDocs.push({ id: d.id, ...d.data() }));
+        recompute();
+      },
+      error => console.error("friendRequests(to) listener failed:", error)
+    );
+  }
+
+  function startNotificationsListener() {
+    if (!currentUser) return;
+    if (unsubNotifications) { unsubNotifications(); unsubNotifications = null; }
+    unsubNotifications = onSnapshot(doc(db, "notifications", currentUser.uid), snapshot => {
+      notifications = snapshot.exists() && Array.isArray(snapshot.data().items) ? snapshot.data().items : [];
+      renderNotifications();
+      updateTabBadges();
+    }, error => console.error("Notifications listener failed:", error));
+  }
+
+  async function markNotificationsRead() {
+    if (!currentUser || !notifications.some(n => !n.read)) return;
+    try {
+      const updated = notifications.map(n => ({ ...n, read: true }));
+      await setDoc(doc(db, "notifications", currentUser.uid), { items: updated }, { merge: true });
+    } catch (e) {
+      console.error("Could not mark notifications read:", e);
+    }
+  }
+
+  function setTab(tab) {
+    activeTab = tab;
+    document.getElementById("friendsTab").style.display = tab === "friends" ? "block" : "none";
+    document.getElementById("requestsTab").style.display = tab === "requests" ? "block" : "none";
+    document.getElementById("notificationsTab").style.display = tab === "notifications" ? "block" : "none";
+    document.getElementById("tabFriendsBtn").classList.toggle("active", tab === "friends");
+    document.getElementById("tabRequestsBtn").classList.toggle("active", tab === "requests");
+    document.getElementById("tabNotifsBtn").classList.toggle("active", tab === "notifications");
+    if (tab === "notifications") markNotificationsRead();
+  }
+
+  async function sendFriendRequest() {
+    const input = document.getElementById("friendUsername");
+    const raw = input.value.trim();
+    if (!raw) { showToast("Enter a username"); return; }
+    if (!currentUser) { showToast("Sign in to add friends"); return; }
+
+    const username = raw.toLowerCase().replace(/[^a-z0-9_.-]/g, "");
+    const myUsername = emailToUsername(currentUser.email);
+    if (username === myUsername) { showToast("That's your own username"); return; }
+
+    try {
+      const dirSnap = await getDocs(query(collection(db, "directory"), where("username", "==", username)));
+      if (dirSnap.empty) { showToast(`No user found with username "${username}"`); return; }
+
+      const friendUid = dirSnap.docs[0].id;
+      const requestId = friendDocId(currentUser.uid, friendUid);
+      const existingSnap = await getDoc(doc(db, "friendRequests", requestId));
+
+      if (existingSnap.exists()) {
+        const existing = existingSnap.data();
+        showToast(existing.status === "accepted" ? "You're already friends" : "A request already exists with this user");
+        return;
+      }
+
+      await setDoc(doc(db, "friendRequests", requestId), {
+        from: currentUser.uid,
+        to: friendUid,
+        fromUsername: myUsername,
+        toUsername: username,
+        status: "pending",
+        createdAt: Date.now(),
+        respondedAt: null
+      });
+
+      await sendNotification(friendUid, {
+        type: "friend_request",
+        message: `${myUsername} sent you a friend request`,
+        relatedId: requestId
+      });
+
+      input.value = "";
+      showToast(`Friend request sent to ${username} ✓`);
+    } catch (e) {
+      console.error("Could not send friend request:", e);
+      showToast("Could not send friend request. Check Firestore rules.");
+    }
+  }
+
+  async function acceptFriendRequest(requestId, fromUid) {
+    try {
+      await updateDoc(doc(db, "friendRequests", requestId), {
+        status: "accepted",
+        respondedAt: Date.now()
+      });
+      await sendNotification(fromUid, {
+        type: "friend_accepted",
+        message: `${emailToUsername(currentUser.email)} accepted your friend request`,
+        relatedId: requestId
+      });
+      showToast("Friend request accepted ✓");
+    } catch (e) {
+      console.error("Could not accept friend request:", e);
+      showToast("Could not accept. Check Firestore rules.");
+    }
+  }
+
+  async function declineFriendRequest(requestId) {
+    try {
+      await deleteDoc(doc(db, "friendRequests", requestId));
+      showToast("Request declined");
+    } catch (e) {
+      console.error("Could not decline friend request:", e);
+      showToast("Could not decline. Check Firestore rules.");
+    }
+  }
+
+  async function cancelFriendRequest(requestId) {
+    try {
+      await deleteDoc(doc(db, "friendRequests", requestId));
+      showToast("Request canceled");
+    } catch (e) {
+      console.error("Could not cancel friend request:", e);
+      showToast("Could not cancel. Check Firestore rules.");
+    }
+  }
+
+  async function removeFriend(requestId) {
+    try {
+      await deleteDoc(doc(db, "friendRequests", requestId));
+      showToast("Friend removed");
+    } catch (e) {
+      console.error("Could not remove friend:", e);
+      showToast("Could not remove friend. Check Firestore rules.");
+    }
+  }
+
+  async function clearAllNotifications() {
+    if (!currentUser) return;
+    try {
+      await setDoc(doc(db, "notifications", currentUser.uid), { items: [] });
+      showToast("Notifications cleared");
+    } catch (e) {
+      console.error("Could not clear notifications:", e);
+      showToast("Could not clear notifications. Check Firestore rules.");
+    }
+  }
+
+  function renderIncoming() {
+    const el = document.getElementById("incomingRequestsList");
+    if (!incomingRequests.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><span class="icon">📭</span>No incoming requests.</div></div>`;
+      return;
+    }
+    el.innerHTML = incomingRequests.map(req => {
+      const other = otherPartyInfo(req);
+      const color = avatarColorFor(other.username);
+      return `
+        <div class="friend-row pending">
+          <div class="friend-row-left">
+            <div class="avatar-circle row-avatar" style="background:${color}26; color:${color};">${initialsFor(other.username)}</div>
+            <div>
+              <div class="friend-name">${escapeHtml(other.username)}</div>
+              <div class="friend-sub">Wants to be friends</div>
+            </div>
+          </div>
+          <div class="friend-actions">
+            <button class="icon-btn accept" onclick="acceptFriendRequest('${req.id}', '${req.from}')" title="Accept">✓</button>
+            <button class="icon-btn danger" onclick="declineFriendRequest('${req.id}')" title="Decline">✕</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderOutgoing() {
+    const el = document.getElementById("outgoingRequestsList");
+    if (!outgoingRequests.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><span class="icon">📤</span>No outgoing requests.</div></div>`;
+      return;
+    }
+    el.innerHTML = outgoingRequests.map(req => {
+      const other = otherPartyInfo(req);
+      const color = avatarColorFor(other.username);
+      return `
+        <div class="friend-row pending">
+          <div class="friend-row-left">
+            <div class="avatar-circle row-avatar" style="background:${color}26; color:${color};">${initialsFor(other.username)}</div>
+            <div>
+              <div class="friend-name">${escapeHtml(other.username)}</div>
+              <div class="friend-sub">Waiting for response</div>
+            </div>
+          </div>
+          <div class="friend-actions">
+            <button class="icon-btn danger" onclick="cancelFriendRequest('${req.id}')" title="Cancel">✕</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderFriends() {
+    const el = document.getElementById("friendsList");
+    if (!friends.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><span class="icon">🤝</span>No friends yet. Add one above to get started.</div></div>`;
+      return;
+    }
+
+    const searchTerm = (document.getElementById("friendSearch")?.value || "").trim().toLowerCase();
+
+    // Published friends float to the top, like Rocket League bubbles
+    // online friends above offline ones — here "online" honestly means
+    // "their schedule is published and viewable right now."
+    const rows = friends
+      .map(req => ({ req, other: otherPartyInfo(req) }))
+      .filter(({ other }) => !searchTerm || other.username.toLowerCase().includes(searchTerm))
+      .sort((a, b) => {
+        const aPub = publishedStatus.get(a.other.uid) ? 1 : 0;
+        const bPub = publishedStatus.get(b.other.uid) ? 1 : 0;
+        if (aPub !== bPub) return bPub - aPub;
+        return a.other.username.localeCompare(b.other.username);
+      });
+
+    if (!rows.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><span class="icon">🔍</span>No friends match "${escapeHtml(searchTerm)}".</div></div>`;
+      return;
+    }
+
+    el.innerHTML = rows.map(({ req, other }) => {
+      const color = avatarColorFor(other.username);
+      const isPublished = publishedStatus.get(other.uid) === true;
+      return `
+        <div class="friend-row">
+          <div class="friend-row-left">
+            <div class="avatar-circle row-avatar" style="background:${color}26; color:${color};">
+              ${initialsFor(other.username)}
+              <span class="status-dot ${isPublished ? "online" : ""}"></span>
+            </div>
+            <div>
+              <div class="friend-name">${escapeHtml(other.username)}</div>
+              <div class="friend-sub">${isPublished ? "Schedule published" : "Schedule private"}</div>
+            </div>
+          </div>
+          <div class="friend-actions">
+            ${isPublished ? `<a class="icon-btn" href="/schedule.html?friend=${encodeURIComponent(other.uid)}" title="View Schedule">📅</a>` : ""}
+            <button class="icon-btn danger" onclick="removeFriend('${req.id}')" title="Remove Friend">✕</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function formatNotifTime(ts) {
+    if (!ts) return "";
+    return new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  }
+
+  function renderNotifications() {
+    const el = document.getElementById("notificationsList");
+    if (!notifications.length) {
+      el.innerHTML = `<div class="card"><div class="empty-state"><span class="icon">🔔</span>No notifications.</div></div>`;
+      return;
+    }
+    const sorted = notifications.slice().sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    el.innerHTML = sorted.map(n => `
+      <div class="notif-row ${n.read ? "" : "unread"}">
+        <div class="notif-row-icon">${NOTIF_ICONS[n.type] || "🔔"}</div>
+        <div>
+          <div>${escapeHtml(n.message || "")}</div>
+          <div class="notif-row-time">${formatNotifTime(n.createdAt)}</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  async function handleAuth() {
+    const username = document.getElementById("authUsername").value.trim();
+    const password = document.getElementById("authPassword").value;
+    if (!username || !password) { showToast("Enter a username and password"); return; }
+    if (username.length < 3) { showToast("Username must be at least 3 characters"); return; }
+    const email = usernameToEmail(username);
+    try {
+      if (isSignUpMode) {
+        await createUserWithEmailAndPassword(auth, email, password);
+        showToast("Account created!");
+      } else {
+        await signInWithEmailAndPassword(auth, email, password);
+        showToast("Welcome back!");
+      }
+    } catch (error) {
+      console.error("Authentication error:", error);
+      const code = error.code || "";
+      let message = "Could not sign in.";
+      if (code === "auth/invalid-credential" || code === "auth/user-not-found" || code === "auth/wrong-password") {
+        message = "Invalid username or password";
+      } else if (code === "auth/email-already-in-use") {
+        message = "Username already taken";
+      } else if (code === "auth/weak-password") {
+        message = "Password must be at least 6 characters";
+      }
+      showToast(message);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      if (unsubFrom) { unsubFrom(); unsubFrom = null; }
+      if (unsubTo) { unsubTo(); unsubTo = null; }
+      if (unsubNotifications) { unsubNotifications(); unsubNotifications = null; }
+      await signOut(auth);
+      currentUser = null;
+      showToast("Logged out");
+    } catch (error) {
+      console.error("Logout error:", error);
+      showToast("Failed to log out");
+    }
+  }
+
+  function toggleAuthMode() {
+    isSignUpMode = !isSignUpMode;
+    const title = document.getElementById("authTitle");
+    const button = document.getElementById("authBtn");
+    const toggle = document.getElementById("authToggle");
+    if (isSignUpMode) {
+      title.textContent = "Create an account";
+      button.textContent = "Sign Up";
+      toggle.textContent = "Already have an account? Sign in";
+    } else {
+      title.textContent = "Sign in to manage friends";
+      button.textContent = "Login";
+      toggle.textContent = "Don't have an account? Sign up";
+    }
+  }
+
+  onAuthStateChanged(auth, user => {
+    currentUser = user;
+    const loggedOutForm = document.getElementById("loggedOutForm");
+    const loggedInView = document.getElementById("loggedInView");
+    const userDisplay = document.getElementById("userDisplay");
+    const friendsContent = document.getElementById("friendsContent");
+
+    if (user) {
+      loggedOutForm.style.display = "none";
+      loggedInView.style.display = "block";
+      friendsContent.style.display = "block";
+      const username = emailToUsername(user.email);
+      userDisplay.textContent = username;
+      const color = avatarColorFor(username);
+      const heroAvatar = document.getElementById("heroAvatar");
+      heroAvatar.textContent = initialsFor(username);
+      heroAvatar.style.background = `${color}26`;
+      heroAvatar.style.color = color;
+      applyTimeBasedGreeting();
+      registerInDirectory(user);
+      startFriendListeners();
+      startNotificationsListener();
+      setTab(activeTab);
+      return;
+    }
+
+    loggedOutForm.style.display = "block";
+    loggedInView.style.display = "none";
+    friendsContent.style.display = "none";
+    if (unsubFrom) { unsubFrom(); unsubFrom = null; }
+    if (unsubTo) { unsubTo(); unsubTo = null; }
+    if (unsubNotifications) { unsubNotifications(); unsubNotifications = null; }
+    setSyncStatus("Sign in to manage friends.");
+  });
+
+  window.handleAuth = handleAuth;
+  window.handleLogout = handleLogout;
+  window.toggleAuthMode = toggleAuthMode;
+  window.setTab = setTab;
+  window.sendFriendRequest = sendFriendRequest;
+  window.acceptFriendRequest = acceptFriendRequest;
+  window.declineFriendRequest = declineFriendRequest;
+  window.cancelFriendRequest = cancelFriendRequest;
+  window.removeFriend = removeFriend;
+  window.clearAllNotifications = clearAllNotifications;
+  window.renderFriends = renderFriends;
+</script>
+
+</body>
+</html>

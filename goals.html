@@ -4,66 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Savings Goals</title>
+<link rel="stylesheet" href="./shared/base.css">
 
 <style>
-  :root {
-    --bg: #0f1115;
-    --card: #1a1d24;
-    --card-hover: #21252e;
-    --accent: #ff8a3d;
-    --accent-soft: #3a2a1e;
-    --text: #eceef2;
-    --text-dim: #9aa0ab;
-    --border: #2a2e38;
-    --danger: #e5484d;
-    --success: #4ade80;
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0 auto; max-width: 720px; padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text);
-  }
-  h1 { margin: 0 0 4px; font-size: 22px; }
-  .subtitle { margin-bottom: 8px; color: var(--text-dim); font-size: 14px; }
-  .dashboard-link { display: inline-block; margin-bottom: 16px; color: var(--accent); font-size: 13px; text-decoration: none; }
-  .dashboard-link:hover { text-decoration: underline; }
-  .sync-status { min-height: 18px; margin-bottom: 14px; color: var(--text-dim); font-size: 12px; }
-  .sync-status.success { color: var(--success); }
-  .sync-status.error { color: #ff8a8f; }
-  .storage-warning {
-    display: none; margin-bottom: 16px; padding: 12px 14px;
-    border: 1px solid var(--danger); border-radius: 10px;
-    background: rgba(229, 72, 77, 0.15); color: #ff8a8f; font-size: 13px; line-height: 1.4;
-  }
-  .storage-warning.show { display: block; }
-  .card, .auth-card {
-    margin-bottom: 16px; padding: 16px; border: 1px solid var(--border);
-    border-radius: 12px; background: var(--card);
-  }
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
   .form-row.full { grid-template-columns: 1fr; }
-  label { display: block; margin-bottom: 4px; color: var(--text-dim); font-size: 12px; }
   input, select {
     width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px;
     outline: none; background: #12141a; color: var(--text); font-size: 14px;
   }
   input:focus, select:focus { border-color: var(--accent); }
-  button {
-    width: 100%; padding: 10px 16px; border: none; border-radius: 8px;
-    background: var(--accent); color: #1a1005; cursor: pointer; font-size: 14px; font-weight: 600;
-  }
-  button:hover { opacity: 0.9; }
-  button.secondary {
-    width: auto; border: 1px solid var(--border); background: transparent; color: var(--text-dim);
-  }
-  .auth-header { margin-bottom: 12px; color: var(--text-dim); font-size: 14px; font-weight: 600; }
-  .auth-link {
-    display: block; margin-top: 10px; color: var(--accent); cursor: pointer;
-    font-size: 12px; text-align: center; text-decoration: underline;
-  }
-  .auth-user-info { color: var(--text); font-size: 13px; }
-  .auth-user-info span { color: var(--accent); font-weight: 600; }
   .summary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .stat { padding: 12px; border-radius: 8px; background: #12141a; text-align: center; }
   .stat-value { color: var(--accent); font-size: 20px; font-weight: 700; }
@@ -74,8 +23,14 @@
     background: #12141a; border-left: 3px solid var(--accent);
   }
   .goal-card.done { border-left-color: var(--success); opacity: 0.75; }
-  .goal-top { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+  .goal-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
   .goal-name { font-size: 15px; font-weight: 700; }
+  .goal-type-badge {
+    display: inline-block; margin-bottom: 4px; padding: 2px 8px; border-radius: 20px;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.3px;
+  }
+  .goal-type-badge.solo { background: var(--accent-soft); color: var(--accent); }
+  .goal-type-badge.shared { background: rgba(139, 127, 224, 0.15); color: #8b7fe0; }
   .goal-name.done-text { text-decoration: line-through; }
   .goal-amounts { font-size: 12px; color: var(--text-dim); margin-bottom: 8px; }
   .goal-amounts .cur { color: var(--success); font-weight: 600; }
@@ -100,15 +55,31 @@
     padding: 5px 10px; border-radius: 20px; background: #21252e;
     font-size: 11px; color: var(--text-dim);
   }
+  .goal-mode-toggle { display: flex; gap: 8px; margin-bottom: 10px; }
+  .mode-btn {
+    flex: 1; padding: 8px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text-dim); font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .mode-btn.active { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  input:disabled { opacity: 0.4; cursor: not-allowed; }
   .shared-member-chip .amt { color: var(--text); font-weight: 600; }
   .shared-member-chip.me { border: 1px solid var(--accent); color: var(--text); }
-  .toast {
-    position: fixed; z-index: 9999; bottom: 20px; left: 50%; padding: 10px 18px;
-    border: 1px solid var(--accent); border-radius: 20px; background: var(--card);
-    font-size: 13px; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity 0.3s;
+  .shared-member-chip.pending { border: 1px dashed var(--text-dim); background: transparent; }
+  .shared-member-chip .cancel-invite {
+    margin-left: 6px; background: none; border: none; width: auto; padding: 0;
+    color: var(--danger); cursor: pointer; font-size: 12px;
   }
-  .toast.show { opacity: 1; }
-  @media (max-width: 520px) { .form-row { grid-template-columns: 1fr; } }
+  .invite-card {
+    margin-bottom: 12px; padding: 14px; border-radius: 10px;
+    background: #12141a; border-left: 3px solid var(--accent);
+  }
+  .invite-top { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+  .invite-meta { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; }
+  .invite-actions { display: flex; gap: 8px; }
+  .invite-actions button.decline { background: transparent; border: 1px solid var(--border); color: var(--text-dim); }
+  .invite-more-row { display: flex; gap: 6px; margin-top: 10px; }
+  .invite-more-row input { flex: 1; font-size: 12px; padding: 6px 8px; }
+  .invite-more-row button { width: auto; padding: 6px 10px; font-size: 12px; }
 </style>
 </head>
 
@@ -126,35 +97,49 @@
   Use a normal browser tab instead of private/incognito mode.
 </div>
 
-<div class="auth-card">
-  <div id="loggedOutForm">
-    <div class="auth-header" id="authTitle">Sign in to sync your goals</div>
-    <div class="form-row">
-      <div>
-        <label for="authUsername">Username</label>
-        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
-      </div>
-      <div>
-        <label for="authPassword">Password</label>
-        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
-      </div>
+<div class="auth-card" id="loggedOutForm">
+  <div class="auth-header" id="authTitle">Sign in to sync your goals</div>
+  <div class="form-row">
+    <div>
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
     </div>
-    <div style="margin-top:12px;">
-      <button id="authBtn" onclick="handleAuth()">Login</button>
+    <div>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
     </div>
-    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
   </div>
-  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
-    <div class="auth-user-info">Cloud synced: <span id="userDisplay"></span></div>
-    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">Logout</button>
+  <div style="margin-top:12px;">
+    <button id="authBtn" onclick="handleAuth()">Login</button>
+  </div>
+  <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">Don't have an account? Sign up</span>
+</div>
+
+<div class="welcome-banner" id="loggedInView" style="display:none;">
+  <div class="welcome-banner-row">
+    <div>
+      <div class="welcome-title">
+        <span id="greetingWord">Welcome back</span>, <span id="userDisplay"></span>! <span id="greetingEmoji">👋</span>
+      </div>
+      <div class="welcome-sub">Your goals sync automatically.</div>
+    </div>
+    <div class="welcome-actions">
+      <div id="friendsDropdownRoot"></div>
+      <button class="secondary" onclick="location.href='/profile.html'" style="padding:6px 12px; font-size:12px; width:auto;">Profile</button>
+      <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px; width:auto;">Logout</button>
+    </div>
   </div>
 </div>
 
 <div class="card">
+  <div class="goal-mode-toggle">
+    <button type="button" class="mode-btn active" id="modeSoloBtn" onclick="setGoalMode(false)">🎯 Solo Goal</button>
+    <button type="button" class="mode-btn" id="modeGroupBtn" onclick="setGoalMode(true)">🤝 Invite Others</button>
+  </div>
   <div class="form-row">
     <div>
       <label for="goalName">Goal</label>
-      <input id="goalName" placeholder="e.g. Emergency fund, House down payment">
+      <input id="goalName" placeholder="e.g. Emergency fund, Vacation fund">
     </div>
     <div>
       <label for="goalTarget">Target amount ($)</label>
@@ -171,85 +156,59 @@
       <input id="goalDate" type="date">
     </div>
   </div>
-  <button onclick="addGoal()">+ Add Goal</button>
+  <div class="form-row full">
+    <div>
+      <label for="goalInvites">Invite usernames (comma-separated)</label>
+      <input id="goalInvites" type="text" placeholder="e.g. taylor, jordan" disabled>
+    </div>
+  </div>
+  <button onclick="submitGoal()">+ Add Goal</button>
 </div>
 
 <div class="card">
   <div class="summary-grid" id="summary"></div>
 </div>
 
+<div id="pendingInvitesList"></div>
+
 <div id="goalList"></div>
-
-<div class="section-heading">
-  🤝 Shared Goals
-  <span class="sub">Team up with someone and save toward one target together.</span>
-</div>
-
-<div class="card">
-  <div class="form-row">
-    <div>
-      <label for="sharedGoalName">Goal</label>
-      <input id="sharedGoalName" placeholder="e.g. Vacation fund">
-    </div>
-    <div>
-      <label for="sharedGoalTarget">Target amount ($)</label>
-      <input id="sharedGoalTarget" type="number" min="0.01" step="0.01" placeholder="e.g. 2000">
-    </div>
-  </div>
-  <div class="form-row">
-    <div>
-      <label for="sharedGoalPartner">Partner's username</label>
-      <input id="sharedGoalPartner" type="text" placeholder="e.g. taylor">
-    </div>
-    <div>
-      <label for="sharedGoalDate">Target date (optional)</label>
-      <input id="sharedGoalDate" type="date">
-    </div>
-  </div>
-  <button onclick="createSharedGoal()">+ Create Shared Goal</button>
-</div>
-
-<div id="sharedGoalList"></div>
 
 <div class="toast" id="toast"></div>
 
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
   import {
-    getAuth,
+    auth,
+    db,
+    emailToUsername,
+    usernameToEmail,
+    escapeHtml,
+    registerInDirectory,
+    showToast,
+    applyTimeBasedGreeting
+  } from "./shared/firebase.js";
+  import {
+    initFriendsDropdown,
+    teardownFriendsDropdown
+  } from "./shared/notifications.js";
+  import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
     onAuthStateChanged
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import {
-    getFirestore,
     doc,
     setDoc,
     updateDoc,
+    deleteDoc,
     onSnapshot,
     collection,
     query,
     where,
-    getDocs
+    getDocs,
+    arrayUnion,
+    arrayRemove
   } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-  const firebaseConfig = {
-    apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
-    authDomain: "scheduler-609b0.firebaseapp.com",
-    projectId: "scheduler-609b0",
-    storageBucket: "scheduler-609b0.firebasestorage.app",
-    messagingSenderId: "151764758872",
-    appId: "1:151764758872:web:4382212aaa6e870395b52d",
-    measurementId: "G-MX8DN7YLB2"
-  };
-
-  const app = initializeApp(firebaseConfig);
-  try { getAnalytics(app); } catch (e) { console.warn("Analytics bypassed.", e); }
-
-  const auth = getAuth(app);
-  const db = getFirestore(app);
 
   const STORAGE_KEY = "benjamin-goals-tracker-data";
 
@@ -261,43 +220,31 @@
   let data = { goals: [] };
   let sharedGoals = [];
   let unsubscribeSharedGoals = null;
+  let pendingInvites = [];
+  let unsubscribePendingInvites = null;
+  let isGroupMode = false;
 
-  function usernameToEmail(username) {
-    const clean = username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
-    return `${clean}@scheduler.app`;
+  function setGoalMode(isGroup) {
+    isGroupMode = isGroup;
+    document.getElementById("modeSoloBtn").classList.toggle("active", !isGroup);
+    document.getElementById("modeGroupBtn").classList.toggle("active", isGroup);
+    const invitesInput = document.getElementById("goalInvites");
+    invitesInput.disabled = !isGroup;
+    if (!isGroup) invitesInput.value = "";
   }
-  function emailToUsername(email) { return email ? email.split("@")[0] : ""; }
 
-  // Registers this user in the shared directory on login, so admins can
-  // find and grant/hide anyone — not just people who've saved a goal.
-  async function registerInDirectory(user) {
-    try {
-      await setDoc(doc(db, "directory", user.uid), {
-        username: emailToUsername(user.email),
-        updatedAt: Date.now()
-      }, { merge: true });
-    } catch (e) {
-      console.error("Could not register in directory:", e);
+  async function submitGoal() {
+    if (isGroupMode) {
+      await createSharedGoal();
+    } else {
+      await addGoal();
     }
-  }
-
-  function escapeHtml(value) {
-    return String(value)
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
   function setSyncStatus(message, type = "") {
     const status = document.getElementById("syncStatus");
     status.textContent = message;
     status.className = `sync-status ${type}`;
-  }
-
-  function showToast(message) {
-    const toast = document.getElementById("toast");
-    toast.textContent = message;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 1800);
   }
 
   async function checkStorage() {
@@ -398,13 +345,18 @@
       return;
     }
 
+    const currentAmount = isNaN(current) ? 0 : current;
+
+    // Same threshold addContribution() uses — a goal created already at or
+    // past its target (e.g. logging savings you'd already hit) should show
+    // as reached immediately, not sit marked active until someone contributes.
     data.goals.push({
       id: Date.now(),
       name,
       targetAmount: target,
-      currentAmount: isNaN(current) ? 0 : current,
+      currentAmount,
       targetDate: dateVal || null,
-      done: false
+      done: currentAmount >= target
     });
 
     await saveData();
@@ -432,14 +384,6 @@
     showToast(`Added $${amount.toFixed(2)} ✓`);
   }
 
-  async function toggleDone(id) {
-    const goal = data.goals.find(g => g.id === id);
-    if (!goal) return;
-    goal.done = !goal.done;
-    await saveData();
-    render();
-  }
-
   async function deleteGoal(id) {
     data.goals = data.goals.filter(g => g.id !== id);
     await saveData();
@@ -449,19 +393,53 @@
   function startSharedGoalsListener() {
     if (!currentUser) return;
     if (unsubscribeSharedGoals) { unsubscribeSharedGoals(); unsubscribeSharedGoals = null; }
+    if (unsubscribePendingInvites) { unsubscribePendingInvites(); unsubscribePendingInvites = null; }
 
     const q = query(collection(db, "sharedGoals"), where("members", "array-contains", currentUser.uid));
 
     unsubscribeSharedGoals = onSnapshot(q, snapshot => {
       sharedGoals = [];
       snapshot.forEach(docSnap => sharedGoals.push({ id: docSnap.id, ...docSnap.data() }));
-      renderSharedGoals();
+      render();
     }, error => {
       console.error("Shared goals listener failed:", error);
       if (error.code === "permission-denied") {
         showToast("Can't load shared goals — Firestore rules need a 'sharedGoals' collection rule.");
       }
     });
+
+    const pendingQuery = query(collection(db, "sharedGoals"), where("pendingMembers", "array-contains", currentUser.uid));
+
+    unsubscribePendingInvites = onSnapshot(pendingQuery, snapshot => {
+      pendingInvites = [];
+      snapshot.forEach(docSnap => pendingInvites.push({ id: docSnap.id, ...docSnap.data() }));
+      renderPendingInvites();
+    }, error => {
+      console.error("Pending invites listener failed:", error);
+    });
+  }
+
+  function cleanInviteUsername(raw) {
+    return raw.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "");
+  }
+
+  // Looks up each username in the shared directory. Returns the ones that
+  // resolved (with their uid) separately from the ones that didn't, so
+  // callers can create/update a goal with whoever was found and still tell
+  // the user about anyone who wasn't.
+  async function resolveUsernames(usernames) {
+    const resolved = [];
+    const notFound = [];
+    for (const username of usernames) {
+      const dirQuery = query(collection(db, "directory"), where("username", "==", username));
+      const dirSnap = await getDocs(dirQuery);
+      if (dirSnap.empty) {
+        notFound.push(username);
+      } else {
+        resolved.push({ uid: dirSnap.docs[0].id, username });
+      }
+    }
+    return { resolved, notFound };
   }
 
   async function createSharedGoal() {
@@ -470,61 +448,65 @@
       return;
     }
 
-    const name = document.getElementById("sharedGoalName").value.trim();
-    const target = parseFloat(document.getElementById("sharedGoalTarget").value);
-    const partnerUsernameRaw = document.getElementById("sharedGoalPartner").value.trim();
-    const dateVal = document.getElementById("sharedGoalDate").value;
+    const name = document.getElementById("goalName").value.trim();
+    const target = parseFloat(document.getElementById("goalTarget").value);
+    const invitesRaw = document.getElementById("goalInvites").value.trim();
+    const dateVal = document.getElementById("goalDate").value;
 
     if (!name || isNaN(target) || target <= 0) {
       showToast("Enter a goal name and a valid target amount");
       return;
     }
 
-    if (!partnerUsernameRaw) {
-      showToast("Enter your partner's username");
+    if (!invitesRaw) {
+      showToast("Enter at least one username to invite");
       return;
     }
 
-    const partnerUsername = partnerUsernameRaw.toLowerCase().replace(/[^a-z0-9_.-]/g, "");
     const myUsername = emailToUsername(currentUser.email);
+    const usernames = [...new Set(invitesRaw.split(",").map(cleanInviteUsername).filter(Boolean))]
+      .filter(u => u !== myUsername);
 
-    if (partnerUsername === myUsername) {
-      showToast("Enter your partner's username, not your own");
+    if (!usernames.length) {
+      showToast("Enter at least one username to invite (not your own)");
       return;
     }
 
     try {
-      const dirQuery = query(collection(db, "directory"), where("username", "==", partnerUsername));
-      const dirSnap = await getDocs(dirQuery);
+      const { resolved, notFound } = await resolveUsernames(usernames);
 
-      if (dirSnap.empty) {
-        showToast(`No user found with username "${partnerUsername}"`);
+      if (!resolved.length) {
+        showToast(`No user found with username "${notFound[0]}"`);
         return;
       }
 
-      const partnerDoc = dirSnap.docs[0];
-      const partnerUid = partnerDoc.id;
-
       const goalId = `shared_${Date.now()}`;
+      const memberNames = { [currentUser.uid]: myUsername };
+      resolved.forEach(r => { memberNames[r.uid] = r.username; });
 
       await setDoc(doc(db, "sharedGoals", goalId), {
         name,
         targetAmount: target,
         targetDate: dateVal || null,
-        members: [currentUser.uid, partnerUid],
-        memberNames: { [currentUser.uid]: myUsername, [partnerUid]: partnerUsername },
-        contributions: { [currentUser.uid]: 0, [partnerUid]: 0 },
+        members: [currentUser.uid],
+        pendingMembers: resolved.map(r => r.uid),
+        memberNames,
+        contributions: { [currentUser.uid]: 0 },
         createdBy: currentUser.uid,
         done: false,
         createdAt: Date.now()
       });
 
-      document.getElementById("sharedGoalName").value = "";
-      document.getElementById("sharedGoalTarget").value = "";
-      document.getElementById("sharedGoalPartner").value = "";
-      document.getElementById("sharedGoalDate").value = "";
+      document.getElementById("goalName").value = "";
+      document.getElementById("goalTarget").value = "";
+      document.getElementById("goalDate").value = "";
+      setGoalMode(false);
 
-      showToast(`Shared goal created with ${partnerUsername} ✓`);
+      showToast(
+        notFound.length
+          ? `Shared goal created. No user found for: ${notFound.join(", ")}`
+          : `Shared goal created — invited ${resolved.length} ✓`
+      );
     } catch (e) {
       console.error("Could not create shared goal:", e);
       showToast("Could not create shared goal. Check Firestore rules.");
@@ -544,9 +526,10 @@
 
     const myUid = currentUser.uid;
     const newMine = (Number(goalItem.contributions?.[myUid]) || 0) + amount;
-    const otherUid = (goalItem.members || []).find(uid => uid !== myUid);
-    const otherAmount = Number(goalItem.contributions?.[otherUid]) || 0;
-    const total = newMine + otherAmount;
+    const othersTotal = (goalItem.members || [])
+      .filter(uid => uid !== myUid)
+      .reduce((sum, uid) => sum + (Number(goalItem.contributions?.[uid]) || 0), 0);
+    const total = newMine + othersTotal;
     const done = total >= (Number(goalItem.targetAmount) || 0);
 
     try {
@@ -562,64 +545,252 @@
     }
   }
 
-  function renderSharedGoals() {
-    const listEl = document.getElementById("sharedGoalList");
+  async function acceptInvite(goalId) {
+    if (!currentUser) return;
+    const uid = currentUser.uid;
+    try {
+      await updateDoc(doc(db, "sharedGoals", goalId), {
+        pendingMembers: arrayRemove(uid),
+        members: arrayUnion(uid),
+        [`contributions.${uid}`]: 0
+      });
+      showToast("Joined shared goal ✓");
+    } catch (e) {
+      console.error("Could not accept invite:", e);
+      showToast("Could not accept invite. Check Firestore rules.");
+    }
+  }
+
+  async function declineInvite(goalId) {
+    if (!currentUser) return;
+    try {
+      await updateDoc(doc(db, "sharedGoals", goalId), {
+        pendingMembers: arrayRemove(currentUser.uid)
+      });
+      showToast("Invite declined");
+    } catch (e) {
+      console.error("Could not decline invite:", e);
+      showToast("Could not decline invite. Check Firestore rules.");
+    }
+  }
+
+  async function inviteMoreToGoal(goalId) {
+    const input = document.getElementById(`invite-more-${goalId}`);
+    const raw = input.value.trim();
+    if (!raw) {
+      showToast("Enter a username to invite");
+      return;
+    }
+
+    const goalItem = sharedGoals.find(g => g.id === goalId);
+    if (!goalItem || !currentUser) return;
+
+    const usernames = [...new Set(raw.split(",").map(cleanInviteUsername).filter(Boolean))];
+    const alreadyIn = new Set([...(goalItem.members || []), ...(goalItem.pendingMembers || [])]);
+
+    try {
+      const { resolved, notFound } = await resolveUsernames(usernames);
+      const toAdd = resolved.filter(r => !alreadyIn.has(r.uid));
+
+      if (!toAdd.length) {
+        showToast(notFound.length
+          ? `No user found with username "${notFound[0]}"`
+          : "Everyone entered is already in this goal");
+        return;
+      }
+
+      const memberNameUpdates = {};
+      toAdd.forEach(r => { memberNameUpdates[`memberNames.${r.uid}`] = r.username; });
+
+      await updateDoc(doc(db, "sharedGoals", goalId), {
+        pendingMembers: arrayUnion(...toAdd.map(r => r.uid)),
+        ...memberNameUpdates
+      });
+
+      input.value = "";
+      showToast(`Invited ${toAdd.length} ✓`);
+    } catch (e) {
+      console.error("Could not invite more people:", e);
+      showToast("Could not send invite. Check Firestore rules.");
+    }
+  }
+
+  async function cancelPendingInvite(goalId, uid) {
+    try {
+      await updateDoc(doc(db, "sharedGoals", goalId), {
+        pendingMembers: arrayRemove(uid)
+      });
+      showToast("Invite canceled");
+    } catch (e) {
+      console.error("Could not cancel invite:", e);
+      showToast("Could not cancel invite. Check Firestore rules.");
+    }
+  }
+
+  async function deleteSharedGoal(goalId) {
+    try {
+      await deleteDoc(doc(db, "sharedGoals", goalId));
+      showToast("Shared goal deleted");
+    } catch (e) {
+      console.error("Could not delete shared goal:", e);
+      showToast("Could not delete shared goal. Check Firestore rules.");
+    }
+  }
+
+  function renderPendingInvites() {
+    const listEl = document.getElementById("pendingInvitesList");
     if (!listEl) return;
 
-    if (!currentUser) {
+    if (!pendingInvites.length) {
       listEl.innerHTML = "";
       return;
     }
 
-    if (!sharedGoals.length) {
-      listEl.innerHTML = `<div class="card"><div class="empty-state">No shared goals yet. Create one above with a partner's username.</div></div>`;
-      return;
-    }
-
-    const sorted = sharedGoals.slice().sort((a, b) => (a.done === b.done) ? 0 : a.done ? 1 : -1);
-
-    listEl.innerHTML = sorted.map(goal => {
-      const target = Number(goal.targetAmount) || 0;
-      const contributions = goal.contributions || {};
-      const total = (goal.members || []).reduce((sum, uid) => sum + (Number(contributions[uid]) || 0), 0);
-      const pct = target > 0 ? Math.min(100, (total / target) * 100) : 0;
-      const remaining = Math.max(0, target - total);
-      const dueLabel = formatDate(goal.targetDate);
-
-      const memberChips = (goal.members || []).map(uid => {
-        const isMe = uid === currentUser.uid;
-        const label = isMe ? "You" : escapeHtml(goal.memberNames?.[uid] || "Partner");
-        const amt = (Number(contributions[uid]) || 0).toFixed(2);
-        return `<div class="shared-member-chip ${isMe ? "me" : ""}">${label}: <span class="amt">$${amt}</span></div>`;
-      }).join("");
-
+    listEl.innerHTML = pendingInvites.map(goal => {
+      const inviterName = escapeHtml(goal.memberNames?.[goal.createdBy] || "Someone");
       return `
-        <div class="goal-card shared-card ${goal.done ? "done" : ""}">
-          <div class="goal-top">
-            <div class="goal-name ${goal.done ? "done-text" : ""}">🤝 ${escapeHtml(goal.name)}</div>
+        <div class="invite-card">
+          <div class="invite-top">🤝 ${escapeHtml(goal.name)}</div>
+          <div class="invite-meta">
+            ${inviterName} invited you · Target $${(Number(goal.targetAmount) || 0).toFixed(2)}
           </div>
-          <div class="shared-members">${memberChips}</div>
-          <div class="goal-amounts">
-            <span class="cur">$${total.toFixed(2)}</span> of
-            <span class="tgt">$${target.toFixed(2)}</span>
-            (${pct.toFixed(0)}%)
+          <div class="invite-actions">
+            <button onclick="acceptInvite('${goal.id}')">Accept</button>
+            <button class="decline" onclick="declineInvite('${goal.id}')">Decline</button>
           </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill ${goal.done ? "done" : ""}" style="width:${pct}%"></div>
-          </div>
-          <div class="goal-meta">
-            ${goal.done ? "🎉 Goal reached!" : `$${remaining.toFixed(2)} left`}
-            ${dueLabel ? ` · By ${dueLabel}` : ""}
-          </div>
-          ${!goal.done ? `
-            <div class="goal-actions">
-              <input id="shared-contrib-${goal.id}" type="number" min="0.01" step="0.01" placeholder="Add your $ amount">
-              <button onclick="addSharedContribution('${goal.id}')">Add</button>
-            </div>
-          ` : ""}
         </div>
       `;
     }).join("");
+  }
+
+  function renderSharedGoalCard(goal) {
+    const target = Number(goal.targetAmount) || 0;
+    const contributions = goal.contributions || {};
+    const total = (goal.members || []).reduce((sum, uid) => sum + (Number(contributions[uid]) || 0), 0);
+    const pct = target > 0 ? (total / target) * 100 : 0;
+    const barPct = Math.min(100, pct);
+    const remaining = Math.max(0, target - total);
+    const dueLabel = formatDate(goal.targetDate);
+
+    const memberChips = (goal.members || []).map(uid => {
+      const isMe = uid === currentUser.uid;
+      const label = isMe ? "You" : escapeHtml(goal.memberNames?.[uid] || "Member");
+      const amt = (Number(contributions[uid]) || 0).toFixed(2);
+      return `<div class="shared-member-chip ${isMe ? "me" : ""}">${label}: <span class="amt">$${amt}</span></div>`;
+    }).join("");
+
+    const pendingChips = (goal.pendingMembers || []).map(uid => {
+      const label = escapeHtml(goal.memberNames?.[uid] || "Invited");
+      return `
+        <div class="shared-member-chip pending">
+          ${label} (invited)
+          <button class="cancel-invite" onclick="cancelPendingInvite('${goal.id}', '${uid}')" title="Cancel invite">✕</button>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="goal-card shared-card ${goal.done ? "done" : ""}">
+        <div class="goal-top">
+          <div>
+            <span class="goal-type-badge shared">🤝 Shared</span>
+            <div class="goal-name ${goal.done ? "done-text" : ""}">${escapeHtml(goal.name)}</div>
+          </div>
+          <button class="del-btn" onclick="deleteSharedGoal('${goal.id}')">✕</button>
+        </div>
+        <div class="shared-members">${memberChips}${pendingChips}</div>
+        <div class="goal-amounts">
+          <span class="cur">$${total.toFixed(2)}</span> of
+          <span class="tgt">$${target.toFixed(2)}</span>
+          (${pct.toFixed(0)}%)
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill ${goal.done ? "done" : ""}" style="width:${pct}%"></div>
+        </div>
+        <div class="goal-meta">
+          ${goal.done ? "🎉 Goal reached!" : `$${remaining.toFixed(2)} left`}
+          ${dueLabel ? ` · By ${dueLabel}` : ""}
+        </div>
+        ${!goal.done ? `
+          <div class="goal-actions">
+            <input id="shared-contrib-${goal.id}" type="number" min="0.01" step="0.01" placeholder="Add your $ amount">
+            <button onclick="addSharedContribution('${goal.id}')">Add</button>
+          </div>
+        ` : ""}
+        ${!goal.done ? `
+          <div class="invite-more-row">
+            <input id="invite-more-${goal.id}" type="text" placeholder="Invite another username">
+            <button class="secondary" onclick="inviteMoreToGoal('${goal.id}')">+ Invite</button>
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  function renderSoloGoalCard(goal) {
+    const target = Number(goal.targetAmount) || 0;
+    const current = Number(goal.currentAmount) || 0;
+    const pct = target > 0 ? (current / target) * 100 : 0;
+    const barPct = Math.min(100, pct);
+    const remaining = Math.max(0, target - current);
+    const dueLabel = formatDate(goal.targetDate);
+    const months = monthsUntil(goal.targetDate);
+    const monthlyNeeded = months && remaining > 0 ? remaining / months : null;
+
+    return `
+      <div class="goal-card ${goal.done ? "done" : ""}">
+        <div class="goal-top">
+          <div>
+            <span class="goal-type-badge solo">🎯 Solo</span>
+            <div class="goal-name ${goal.done ? "done-text" : ""}">${escapeHtml(goal.name)}</div>
+          </div>
+          <button class="del-btn" onclick="deleteGoal(${goal.id})">✕</button>
+        </div>
+        <div class="shared-members">
+          <div class="shared-member-chip me">You: <span class="amt">$${current.toFixed(2)}</span></div>
+        </div>
+        <div class="goal-amounts">
+          <span class="cur">$${current.toFixed(2)}</span> of
+          <span class="tgt">$${target.toFixed(2)}</span>
+          (${pct.toFixed(0)}%)
+        </div>
+        <div class="progress-bar-bg">
+          <div class="progress-bar-fill ${goal.done ? "done" : ""}" style="width:${barPct}%"></div>
+        </div>
+        <div class="goal-meta">
+          ${goal.done ? "🎉 Goal reached!" : `$${remaining.toFixed(2)} left`}
+          ${dueLabel ? ` · By ${dueLabel}` : ""}
+          ${monthlyNeeded ? ` · ~$${monthlyNeeded.toFixed(2)}/month needed` : ""}
+        </div>
+        ${!goal.done ? `
+          <div class="goal-actions">
+            <input id="contrib-${goal.id}" type="number" min="0.01" step="0.01" placeholder="Add $ amount">
+            <button onclick="addContribution(${goal.id})">Add</button>
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }
+
+  function renderGoalList() {
+    const listEl = document.getElementById("goalList");
+    if (!listEl) return;
+
+    const combined = [
+      ...(data.goals || []).map(g => ({ ...g, kind: "solo" })),
+      ...sharedGoals.map(g => ({ ...g, kind: "shared" }))
+    ];
+
+    if (!combined.length) {
+      listEl.innerHTML = `<div class="card"><div class="empty-state">No goals yet. Add one above — solo, or invite others to save toward it together.</div></div>`;
+      return;
+    }
+
+    const sorted = combined.sort((a, b) => (a.done === b.done) ? 0 : a.done ? 1 : -1);
+
+    listEl.innerHTML = sorted.map(item =>
+      item.kind === "shared" ? renderSharedGoalCard(item) : renderSoloGoalCard(item)
+    ).join("");
   }
 
   function monthsUntil(dateString) {
@@ -638,10 +809,25 @@
 
   function render() {
     const goals = data.goals || [];
-    const totalTarget = goals.reduce((s, g) => s + (Number(g.targetAmount) || 0), 0);
-    const totalCurrent = goals.reduce((s, g) => s + Math.min(Number(g.currentAmount) || 0, Number(g.targetAmount) || 0), 0);
-    const activeCount = goals.filter(g => !g.done).length;
-    const doneCount = goals.filter(g => g.done).length;
+    // Not capped at each goal's target — an over-funded goal's full amount
+    // still counts toward how much you've actually saved overall.
+    const soloTarget = goals.reduce((s, g) => s + (Number(g.targetAmount) || 0), 0);
+    const soloCurrent = goals.reduce((s, g) => s + (Number(g.currentAmount) || 0), 0);
+
+    // Shared goals' "current" is the group total (everyone's contributions
+    // combined), same figure shown on the card itself — not just your own
+    // share of it, since the goal only counts as saved-toward once, together.
+    const sharedTarget = sharedGoals.reduce((s, g) => s + (Number(g.targetAmount) || 0), 0);
+    const sharedCurrent = sharedGoals.reduce((s, g) => {
+      const contributions = g.contributions || {};
+      const contributed = (g.members || []).reduce((sum, uid) => sum + (Number(contributions[uid]) || 0), 0);
+      return s + contributed;
+    }, 0);
+
+    const totalTarget = soloTarget + sharedTarget;
+    const totalCurrent = soloCurrent + sharedCurrent;
+    const activeCount = goals.filter(g => !g.done).length + sharedGoals.filter(g => !g.done).length;
+    const doneCount = goals.filter(g => g.done).length + sharedGoals.filter(g => g.done).length;
 
     document.getElementById("summary").innerHTML = `
       <div class="stat">
@@ -662,51 +848,7 @@
       </div>
     `;
 
-    const listEl = document.getElementById("goalList");
-    if (!goals.length) {
-      listEl.innerHTML = `<div class="card"><div class="empty-state">No goals yet. Add one above — like a car down payment or emergency fund.</div></div>`;
-      return;
-    }
-
-    const sorted = goals.slice().sort((a, b) => (a.done === b.done) ? 0 : a.done ? 1 : -1);
-
-    listEl.innerHTML = sorted.map(goal => {
-      const pct = goal.targetAmount > 0 ? Math.min(100, (goal.currentAmount / goal.targetAmount) * 100) : 0;
-      const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
-      const dueLabel = formatDate(goal.targetDate);
-      const months = monthsUntil(goal.targetDate);
-      const monthlyNeeded = months && remaining > 0 ? remaining / months : null;
-
-      return `
-        <div class="goal-card ${goal.done ? "done" : ""}">
-          <div class="goal-top">
-            <div class="goal-name ${goal.done ? "done-text" : ""}">${escapeHtml(goal.name)}</div>
-            <button class="del-btn" onclick="deleteGoal(${goal.id})">✕</button>
-          </div>
-          <div class="goal-amounts">
-            <span class="cur">$${(Number(goal.currentAmount) || 0).toFixed(2)}</span> of
-            <span class="tgt">$${(Number(goal.targetAmount) || 0).toFixed(2)}</span>
-            (${pct.toFixed(0)}%)
-          </div>
-          <div class="progress-bar-bg">
-            <div class="progress-bar-fill ${goal.done ? "done" : ""}" style="width:${pct}%"></div>
-          </div>
-          <div class="goal-meta">
-            ${goal.done ? "🎉 Goal reached!" : `$${remaining.toFixed(2)} left`}
-            ${dueLabel ? ` · By ${dueLabel}` : ""}
-            ${monthlyNeeded ? ` · ~$${monthlyNeeded.toFixed(2)}/month needed` : ""}
-          </div>
-          ${!goal.done ? `
-            <div class="goal-actions">
-              <input id="contrib-${goal.id}" type="number" min="0.01" step="0.01" placeholder="Add $ amount">
-              <button onclick="addContribution(${goal.id})">Add</button>
-            </div>
-          ` : `
-            <button class="secondary" onclick="toggleDone(${goal.id})">Mark as not done</button>
-          `}
-        </div>
-      `;
-    }).join("");
+    renderGoalList();
   }
 
   async function handleAuth() {
@@ -742,12 +884,14 @@
     try {
       if (unsubscribeGoals) { unsubscribeGoals(); unsubscribeGoals = null; }
       if (unsubscribeSharedGoals) { unsubscribeSharedGoals(); unsubscribeSharedGoals = null; }
+      if (unsubscribePendingInvites) { unsubscribePendingInvites(); unsubscribePendingInvites = null; }
       await signOut(auth);
       currentUser = null;
       sharedGoals = [];
+      pendingInvites = [];
       loadLocalData();
       render();
-      renderSharedGoals();
+      renderPendingInvites();
       setSyncStatus("Showing goals saved on this device.");
       showToast("Logged out");
     } catch (error) {
@@ -780,34 +924,42 @@
 
     if (user) {
       loggedOutForm.style.display = "none";
-      loggedInView.style.display = "flex";
+      loggedInView.style.display = "block";
       userDisplay.textContent = emailToUsername(user.email);
+      applyTimeBasedGreeting();
       loadLocalData();
       startGoalsListener();
       startSharedGoalsListener();
       registerInDirectory(user);
+      initFriendsDropdown(user.uid, emailToUsername(user.email));
       render();
       return;
     }
 
     loggedOutForm.style.display = "block";
     loggedInView.style.display = "none";
+    teardownFriendsDropdown();
     loadLocalData();
     sharedGoals = [];
+    pendingInvites = [];
     setSyncStatus("Sign in to sync goals to Firebase.");
     render();
-    renderSharedGoals();
+    renderPendingInvites();
   });
 
   window.handleAuth = handleAuth;
   window.handleLogout = handleLogout;
   window.toggleAuthMode = toggleAuthMode;
-  window.addGoal = addGoal;
+  window.setGoalMode = setGoalMode;
+  window.submitGoal = submitGoal;
   window.addContribution = addContribution;
-  window.toggleDone = toggleDone;
   window.deleteGoal = deleteGoal;
-  window.createSharedGoal = createSharedGoal;
   window.addSharedContribution = addSharedContribution;
+  window.acceptInvite = acceptInvite;
+  window.declineInvite = declineInvite;
+  window.inviteMoreToGoal = inviteMoreToGoal;
+  window.cancelPendingInvite = cancelPendingInvite;
+  window.deleteSharedGoal = deleteSharedGoal;
 
   (async () => {
     await checkStorage();
