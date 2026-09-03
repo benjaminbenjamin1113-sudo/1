@@ -409,11 +409,13 @@ import {
   initFriendsDropdown,
   teardownFriendsDropdown
 } from "./shared/notifications.js";
-import {
-  US_STATES,
-  STATE_TAX,
-  estimatePaycheck
-} from "./shared/tax.js";
+// shared/tax.js is loaded lazily below (loadTaxModule), NOT as a static
+// import here. A static import that fails (missing file, bad path, etc.)
+// kills this entire module — including the Firebase auth listener that
+// logs you in automatically — which is exactly what was happening: the
+// tax estimator's own import was taking the whole page down with it.
+// Loading it on demand means a tax.js problem only breaks the tax card,
+// never login or anything else on the page.
 
 const STORAGE_KEY = "benjamin-schedule-tracker-data";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -1037,26 +1039,61 @@ async function confirmDraftShifts() {
 // Paycheck / tax estimate card.
 // ---------------------------------------------------------------------
 
-function populateTaxStateOptions() {
+let taxModule = null;
+let taxModuleFailed = false;
+
+// Loads shared/tax.js on first actual use instead of at page load, so a
+// broken/missing tax.js can never block auth or the rest of the page from
+// working (see the comment up by the other imports). Cached after the
+// first successful load; if it fails, we remember that and stop retrying
+// every keystroke — the tax card just shows a clear message instead.
+async function loadTaxModule() {
+  if (taxModule) return taxModule;
+  if (taxModuleFailed) return null;
+
+  try {
+    taxModule = await import("./shared/tax.js");
+    return taxModule;
+  } catch (error) {
+    console.error("Could not load shared/tax.js — tax estimate unavailable:", error);
+    taxModuleFailed = true;
+    return null;
+  }
+}
+
+async function populateTaxStateOptions() {
   const select = document.getElementById("taxState");
-  select.innerHTML = US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
+  const mod = await loadTaxModule();
+
+  if (!mod) {
+    select.innerHTML = `<option value="">Unavailable</option>`;
+    return;
+  }
+
+  select.innerHTML = mod.US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
 }
 
 // One line under the state/filing-status row telling the user, in plain
 // language, how their chosen state actually treats paycheck withholding —
 // since "no state income tax" states (NV, TX, FL, WA, ...) should visibly
 // zero out that line rather than just showing "$0" with no explanation.
-function updateTaxStateNote() {
+async function updateTaxStateNote() {
   const noteEl = document.getElementById("taxStateNote");
   const code = document.getElementById("taxState").value;
+  const mod = await loadTaxModule();
+
+  if (!mod) {
+    noteEl.textContent = "Tax estimate is unavailable right now.";
+    return;
+  }
 
   if (!code) {
     noteEl.textContent = "Pick a state to see how it affects your paycheck.";
     return;
   }
 
-  const [, stateName] = US_STATES.find(([c]) => c === code) || [code, code];
-  const info = STATE_TAX[code];
+  const [, stateName] = mod.US_STATES.find(([c]) => c === code) || [code, code];
+  const info = mod.STATE_TAX[code];
 
   if (!info || info.type === "none") {
     noteEl.textContent = `${stateName} has no state income tax — only federal tax and FICA come out of your paycheck.`;
@@ -1067,7 +1104,7 @@ function updateTaxStateNote() {
   }
 }
 
-function loadTaxSettingsIntoForm() {
+async function loadTaxSettingsIntoForm() {
   const settings = data.taxSettings || {};
 
   document.getElementById("taxState").value = settings.state || "";
@@ -1083,8 +1120,8 @@ function loadTaxSettingsIntoForm() {
     document.getElementById("taxAnnualIncome").value = weeklyPay > 0 ? Math.round(weeklyPay * 52) : "";
   }
 
-  updateTaxStateNote();
-  recalcTaxSummary();
+  await updateTaxStateNote();
+  await recalcTaxSummary();
 }
 
 function onTaxSettingsChange() {
@@ -1101,11 +1138,19 @@ function onTaxSettingsChange() {
   saveCloudData();
 }
 
-function recalcTaxSummary() {
+async function recalcTaxSummary() {
   const summaryEl = document.getElementById("taxSummary");
   const breakdownEl = document.getElementById("taxDeductionBreakdown");
   const breakdownLabel = document.getElementById("taxBreakdownLabel");
   const annualIncome = Number(document.getElementById("taxAnnualIncome").value) || 0;
+
+  const mod = await loadTaxModule();
+  if (!mod) {
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Tax estimate is unavailable right now — everything else on this page still works fine.</div>`;
+    breakdownEl.innerHTML = "";
+    breakdownLabel.style.display = "none";
+    return;
+  }
 
   if (!annualIncome) {
     summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see your paycheck deductions.</div>`;
@@ -1115,9 +1160,9 @@ function recalcTaxSummary() {
   }
 
   const stateCode = document.getElementById("taxState").value;
-  const [, stateName] = US_STATES.find(([c]) => c === stateCode) || [stateCode, "your state"];
+  const [, stateName] = mod.US_STATES.find(([c]) => c === stateCode) || [stateCode, "your state"];
 
-  const result = estimatePaycheck({
+  const result = mod.estimatePaycheck({
     annualGross: annualIncome,
     filingStatus: document.getElementById("taxFilingStatus").value,
     stateCode,

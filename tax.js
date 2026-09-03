@@ -90,7 +90,7 @@ export function computeFICA(annualGross, filingStatus) {
 export const STATE_TAX = {
   AL: { type: "brackets", deduction: 2500, brackets: [[0, 0.02], [500, 0.04], [3000, 0.05]] },
   AK: { type: "none" },
-  AZ: { type: "flat", rate: 0.025, deduction: 14600 },
+  AZ: { type: "flat", rate: 0.025, deduction: 15750 },
   AR: { type: "brackets", deduction: 2200, brackets: [[0, 0.02], [4400, 0.039]] },
   CA: {
     type: "brackets", deduction: 5540,
