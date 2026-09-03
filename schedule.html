@@ -289,7 +289,7 @@
       Upload a photo of your posted schedule (a paper schedule, a text message, an app screenshot).
       We'll scan it for day/time patterns and let you review and edit before anything is added.
     </div>
-    <input type="file" id="scheduleImageInput" accept="image/*" capture="environment" style="margin-bottom:10px; padding:8px; background:#12141a; border:1px solid var(--border); border-radius:8px; color:var(--text); width:100%;">
+    <input type="file" id="scheduleImageInput" accept="image/*" style="margin-bottom:10px; padding:8px; background:#12141a; border:1px solid var(--border); border-radius:8px; color:var(--text); width:100%;">
     <button class="secondary" style="width:100%;" onclick="scanScheduleImage()">🔍 Scan Image for Shifts</button>
     <div class="sync-status" id="scanStatus"></div>
     <div id="scanResults" style="display:none; margin-top:12px;"></div>
@@ -302,14 +302,14 @@
   <div class="card" id="shiftList"></div>
 
   <div class="card">
-    <div class="auth-header">🧾 Paycheck &amp; Tax Estimate</div>
+    <div class="auth-header">🧾 Paycheck Deductions</div>
     <div class="visibility-desc" style="margin-bottom:10px;">
-      A rough planning estimate — not tax advice. Uses simplified 2026 federal brackets, FICA, and your state's rates.
+      What actually gets taken out of your paycheck — federal tax, your state's tax (if any), and FICA. A rough planning estimate, not tax advice.
     </div>
 
     <div class="form-row">
       <div>
-        <label for="taxState">State</label>
+        <label for="taxState">State (where you work)</label>
         <select id="taxState" onchange="onTaxSettingsChange()"></select>
       </div>
       <div>
@@ -321,6 +321,8 @@
         </select>
       </div>
     </div>
+
+    <div class="visibility-desc" id="taxStateNote" style="margin-bottom:10px;"></div>
 
     <div class="form-row">
       <div>
@@ -339,6 +341,9 @@
     </div>
 
     <div class="summary-grid" id="taxSummary"></div>
+
+    <div class="insight-title" id="taxBreakdownLabel" style="margin-top:14px; display:none;">Where your paycheck deduction goes</div>
+    <div id="taxDeductionBreakdown"></div>
   </div>
 </div>
 
@@ -406,6 +411,7 @@ import {
 } from "./shared/notifications.js";
 import {
   US_STATES,
+  STATE_TAX,
   estimatePaycheck
 } from "./shared/tax.js";
 
@@ -1036,6 +1042,31 @@ function populateTaxStateOptions() {
   select.innerHTML = US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
 }
 
+// One line under the state/filing-status row telling the user, in plain
+// language, how their chosen state actually treats paycheck withholding —
+// since "no state income tax" states (NV, TX, FL, WA, ...) should visibly
+// zero out that line rather than just showing "$0" with no explanation.
+function updateTaxStateNote() {
+  const noteEl = document.getElementById("taxStateNote");
+  const code = document.getElementById("taxState").value;
+
+  if (!code) {
+    noteEl.textContent = "Pick a state to see how it affects your paycheck.";
+    return;
+  }
+
+  const [, stateName] = US_STATES.find(([c]) => c === code) || [code, code];
+  const info = STATE_TAX[code];
+
+  if (!info || info.type === "none") {
+    noteEl.textContent = `${stateName} has no state income tax — only federal tax and FICA come out of your paycheck.`;
+  } else if (info.type === "flat") {
+    noteEl.textContent = `${stateName} withholds state income tax at a flat ${(info.rate * 100).toFixed(2)}% above the standard deduction.`;
+  } else {
+    noteEl.textContent = `${stateName} withholds state income tax on a bracket schedule — the rate rises with how much you earn.`;
+  }
+}
+
 function loadTaxSettingsIntoForm() {
   const settings = data.taxSettings || {};
 
@@ -1052,6 +1083,7 @@ function loadTaxSettingsIntoForm() {
     document.getElementById("taxAnnualIncome").value = weeklyPay > 0 ? Math.round(weeklyPay * 52) : "";
   }
 
+  updateTaxStateNote();
   recalcTaxSummary();
 }
 
@@ -1063,6 +1095,7 @@ function onTaxSettingsChange() {
     annualIncome: Number(document.getElementById("taxAnnualIncome").value) || null
   };
 
+  updateTaxStateNote();
   recalcTaxSummary();
   saveLocalData();
   saveCloudData();
@@ -1070,29 +1103,58 @@ function onTaxSettingsChange() {
 
 function recalcTaxSummary() {
   const summaryEl = document.getElementById("taxSummary");
+  const breakdownEl = document.getElementById("taxDeductionBreakdown");
+  const breakdownLabel = document.getElementById("taxBreakdownLabel");
   const annualIncome = Number(document.getElementById("taxAnnualIncome").value) || 0;
 
   if (!annualIncome) {
-    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see a breakdown.</div>`;
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see your paycheck deductions.</div>`;
+    breakdownEl.innerHTML = "";
+    breakdownLabel.style.display = "none";
     return;
   }
+
+  const stateCode = document.getElementById("taxState").value;
+  const [, stateName] = US_STATES.find(([c]) => c === stateCode) || [stateCode, "your state"];
 
   const result = estimatePaycheck({
     annualGross: annualIncome,
     filingStatus: document.getElementById("taxFilingStatus").value,
-    stateCode: document.getElementById("taxState").value,
+    stateCode,
     periodsPerYear: Number(document.getElementById("taxPeriods").value) || 26
   });
 
+  const totalDeducted = result.perPeriod.gross - result.perPeriod.net;
+  const deductedPct = result.perPeriod.gross ? (totalDeducted / result.perPeriod.gross) * 100 : 0;
+
+  // Leads with "what comes out" and "what you keep" — the two numbers that
+  // actually answer "what will I be paid" — before the per-year totals.
   summaryEl.innerHTML = `
+    <div class="stat"><div class="stat-value">$${totalDeducted.toFixed(2)}</div><div class="stat-label">Total Deducted / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.perPeriod.net.toFixed(2)}</div><div class="stat-label">Take-Home / Paycheck</div></div>
     <div class="stat"><div class="stat-value">$${result.perPeriod.gross.toFixed(2)}</div><div class="stat-label">Gross / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${result.perPeriod.net.toFixed(2)}</div><div class="stat-label">Est. Net / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${(result.perPeriod.federal + result.perPeriod.state).toFixed(2)}</div><div class="stat-label">Income Tax / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${result.perPeriod.fica.toFixed(2)}</div><div class="stat-label">FICA / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${result.federal.toFixed(0)}</div><div class="stat-label">Federal Tax / Year</div></div>
-    <div class="stat"><div class="stat-value">$${result.state.toFixed(0)}</div><div class="stat-label">State Tax / Year</div></div>
-    <div class="stat"><div class="stat-value">$${result.fica.total.toFixed(0)}</div><div class="stat-label">FICA / Year</div></div>
+    <div class="stat"><div class="stat-value">${deductedPct.toFixed(1)}%</div><div class="stat-label">% Deducted</div></div>
     <div class="stat"><div class="stat-value">$${result.netAnnual.toFixed(0)}</div><div class="stat-label">Est. Net / Year</div></div>
+    <div class="stat"><div class="stat-value">$${result.totalTax.toFixed(0)}</div><div class="stat-label">Total Deducted / Year</div></div>
+  `;
+
+  // The per-source breakdown, called out separately so the state's own
+  // slice of the deduction (the part that changes if he ever works or
+  // moves to a different state) is easy to see on its own.
+  breakdownLabel.style.display = "block";
+  breakdownEl.innerHTML = `
+    <div class="insight-row">
+      <div class="insight-row-label">Federal income tax</div>
+      <div class="insight-row-value">$${result.perPeriod.federal.toFixed(2)} / paycheck · $${result.federal.toFixed(0)}/yr</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-row-label">${escapeHtml(stateName)} state tax</div>
+      <div class="insight-row-value">${result.state > 0 ? `$${result.perPeriod.state.toFixed(2)} / paycheck · $${result.state.toFixed(0)}/yr` : "$0 — no state income tax"}</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-row-label">FICA (Social Security + Medicare)</div>
+      <div class="insight-row-value">$${result.perPeriod.fica.toFixed(2)} / paycheck · $${result.fica.total.toFixed(0)}/yr</div>
+    </div>
   `;
 }
 
