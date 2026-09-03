@@ -279,7 +279,20 @@
       <div></div>
     </div>
 
-    <button onclick="addShift()">+ Add Shift</button>
+    <button id="addShiftBtn" onclick="addShift()">+ Add Shift</button>
+    <button id="cancelEditBtn" class="secondary" style="display:none; margin-top:8px;" onclick="cancelEditShift()">Cancel Edit</button>
+  </div>
+
+  <div class="card">
+    <div class="auth-header">📸 Import Shifts from a Screenshot</div>
+    <div class="visibility-desc" style="margin-bottom:10px;">
+      Upload a photo of your posted schedule (a paper schedule, a text message, an app screenshot).
+      We'll scan it for day/time patterns and let you review and edit before anything is added.
+    </div>
+    <input type="file" id="scheduleImageInput" accept="image/*" capture="environment" style="margin-bottom:10px; padding:8px; background:#12141a; border:1px solid var(--border); border-radius:8px; color:var(--text); width:100%;">
+    <button class="secondary" style="width:100%;" onclick="scanScheduleImage()">🔍 Scan Image for Shifts</button>
+    <div class="sync-status" id="scanStatus"></div>
+    <div id="scanResults" style="display:none; margin-top:12px;"></div>
   </div>
 
   <div class="card">
@@ -287,6 +300,46 @@
   </div>
 
   <div class="card" id="shiftList"></div>
+
+  <div class="card">
+    <div class="auth-header">🧾 Paycheck &amp; Tax Estimate</div>
+    <div class="visibility-desc" style="margin-bottom:10px;">
+      A rough planning estimate — not tax advice. Uses simplified 2026 federal brackets, FICA, and your state's rates.
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="taxState">State</label>
+        <select id="taxState" onchange="onTaxSettingsChange()"></select>
+      </div>
+      <div>
+        <label for="taxFilingStatus">Filing status</label>
+        <select id="taxFilingStatus" onchange="onTaxSettingsChange()">
+          <option value="single">Single</option>
+          <option value="marriedJoint">Married filing jointly</option>
+          <option value="headOfHousehold">Head of household</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="taxAnnualIncome">Estimated annual pay ($)</label>
+        <input id="taxAnnualIncome" type="number" min="0" step="100" oninput="recalcTaxSummary()" onchange="onTaxSettingsChange()">
+      </div>
+      <div>
+        <label for="taxPeriods">Pay frequency</label>
+        <select id="taxPeriods" onchange="onTaxSettingsChange()">
+          <option value="52">Weekly</option>
+          <option value="26" selected>Biweekly</option>
+          <option value="24">Semi-monthly</option>
+          <option value="12">Monthly</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="summary-grid" id="taxSummary"></div>
+  </div>
 </div>
 
 <div id="allWeeksView" style="display:none;"></div>
@@ -351,6 +404,10 @@ import {
   initFriendsDropdown,
   teardownFriendsDropdown
 } from "./shared/notifications.js";
+import {
+  US_STATES,
+  estimatePaycheck
+} from "./shared/tax.js";
 
 const STORAGE_KEY = "benjamin-schedule-tracker-data";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -370,9 +427,13 @@ let friendWeekOffset = 0;
 let friendWeeksData = {};
 let friendUsername = "";
 
+let editingShiftId = null;
+let scannedDraftShifts = [];
+
 let data = {
   weeks: {},
-  jobRates: {}
+  jobRates: {},
+  taxSettings: {}
 };
 
 function setSyncStatus(message, type = "") {
@@ -405,7 +466,8 @@ function loadLocalData() {
       const parsed = JSON.parse(raw);
       data = {
         weeks: parsed.weeks || {},
-        jobRates: parsed.jobRates || {}
+        jobRates: parsed.jobRates || {},
+        taxSettings: parsed.taxSettings || {}
       };
     }
   } catch (error) {
@@ -612,6 +674,7 @@ async function saveCloudData() {
     await setDoc(doc(db, "users", currentUser.uid), {
       weeks: data.weeks || {},
       jobRates: data.jobRates || {},
+      taxSettings: data.taxSettings || {},
       username: emailToUsername(currentUser.email),
       updatedAt: Date.now()
     });
@@ -638,7 +701,8 @@ function startScheduleListener() {
 
         data = {
           weeks: cloud.weeks || {},
-          jobRates: cloud.jobRates || {}
+          jobRates: cloud.jobRates || {},
+          taxSettings: cloud.taxSettings || {}
         };
 
         saveLocalData();
@@ -656,6 +720,34 @@ function startScheduleListener() {
       setSyncStatus("Firebase cannot load schedule. Check Firestore rules.", "error");
     }
   );
+}
+
+function startEditShift(id) {
+  const key = weekKey(currentWeekOffset);
+  const shift = (data.weeks[key] || []).find(s => Number(s.id) === Number(id));
+  if (!shift) return;
+
+  editingShiftId = shift.id;
+
+  document.getElementById("day").value = shift.day;
+  document.getElementById("job").value = shift.job;
+  document.getElementById("start").value = shift.start;
+  document.getElementById("end").value = shift.end;
+  document.getElementById("rate").value = shift.rate || "";
+
+  document.getElementById("addShiftBtn").textContent = "Update Shift";
+  document.getElementById("cancelEditBtn").style.display = "block";
+
+  document.getElementById("day").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelEditShift() {
+  editingShiftId = null;
+
+  document.getElementById("job").value = "";
+  document.getElementById("rate").value = "";
+  document.getElementById("addShiftBtn").textContent = "+ Add Shift";
+  document.getElementById("cancelEditBtn").style.display = "none";
 }
 
 async function addShift() {
@@ -679,19 +771,33 @@ async function addShift() {
 
   const rate = enteredRate ?? data.jobRates[job] ?? null;
   const key = weekKey(currentWeekOffset);
+  const wasEditing = editingShiftId != null;
 
   if (!data.weeks[key]) data.weeks[key] = [];
   if (rate) data.jobRates[job] = rate;
 
-  data.weeks[key].push({
-    id: Date.now(),
-    day,
-    job,
-    start,
-    end,
-    hours: hoursBetween(start, end),
-    rate
-  });
+  if (wasEditing) {
+    const list = data.weeks[key];
+    const idx = list.findIndex(s => Number(s.id) === Number(editingShiftId));
+
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], day, job, start, end, hours: hoursBetween(start, end), rate };
+    }
+
+    editingShiftId = null;
+    document.getElementById("addShiftBtn").textContent = "+ Add Shift";
+    document.getElementById("cancelEditBtn").style.display = "none";
+  } else {
+    data.weeks[key].push({
+      id: Date.now(),
+      day,
+      job,
+      start,
+      end,
+      hours: hoursBetween(start, end),
+      rate
+    });
+  }
 
   saveLocalData();
   render();
@@ -700,7 +806,9 @@ async function addShift() {
   document.getElementById("rate").value = "";
 
   const saved = await saveCloudData();
-  showToast(saved ? "Shift added and saved ✓" : "Shift added locally, cloud save failed");
+  showToast(saved
+    ? (wasEditing ? "Shift updated ✓" : "Shift added and saved ✓")
+    : (wasEditing ? "Updated locally, cloud save failed" : "Shift added locally, cloud save failed"));
 }
 
 async function deleteShift(id) {
@@ -712,11 +820,280 @@ async function deleteShift(id) {
 
   if (!data.weeks[key].length) delete data.weeks[key];
 
+  if (editingShiftId === id) cancelEditShift();
+
   saveLocalData();
   render();
 
   const saved = await saveCloudData();
   showToast(saved ? "Shift deleted and cloud updated ✓" : "Deleted locally, cloud update failed");
+}
+
+// ---------------------------------------------------------------------
+// Screenshot import: OCR the image client-side (Tesseract.js, loaded on
+// demand so pages that never use this feature don't pay for it), then run
+// a heuristic parser over the recognized text looking for "day name" +
+// "time range" patterns. Nothing gets added to the schedule until the
+// user reviews/edits the draft rows and confirms.
+// ---------------------------------------------------------------------
+
+async function scanScheduleImage() {
+  const fileInput = document.getElementById("scheduleImageInput");
+  const file = fileInput.files && fileInput.files[0];
+  const statusEl = document.getElementById("scanStatus");
+
+  if (!file) {
+    showToast("Choose an image first");
+    return;
+  }
+
+  statusEl.className = "sync-status";
+  statusEl.textContent = "Loading text recognition… (first scan can take a few seconds)";
+
+  try {
+    const { createWorker } = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
+    const worker = await createWorker("eng");
+
+    statusEl.textContent = "Reading the image…";
+    const { data: { text } } = await worker.recognize(file);
+    await worker.terminate();
+
+    statusEl.textContent = "Looking for shifts…";
+    const drafts = parseScheduleText(text);
+
+    if (!drafts.length) {
+      statusEl.className = "sync-status error";
+      statusEl.textContent = "Couldn't find any recognizable shifts in that image. Try a clearer, more cropped screenshot, or add shifts manually above.";
+      document.getElementById("scanResults").style.display = "none";
+      return;
+    }
+
+    scannedDraftShifts = drafts;
+    statusEl.className = "sync-status success";
+    statusEl.textContent = `Found ${drafts.length} possible shift${drafts.length === 1 ? "" : "s"} — review and edit before adding.`;
+    renderScanResults();
+  } catch (error) {
+    console.error("Schedule scan failed:", error);
+    statusEl.className = "sync-status error";
+    statusEl.textContent = "Couldn't read that image. Try again, or add shifts manually above.";
+  }
+}
+
+function parseScheduleText(rawText) {
+  const DAY_PATTERNS = [
+    ["Monday", /\bmon(day)?\b/i],
+    ["Tuesday", /\btues?(day)?\b/i],
+    ["Wednesday", /\bwed(nesday)?\b/i],
+    ["Thursday", /\bthu(r|rs|rsday)?\b/i],
+    ["Friday", /\bfri(day)?\b/i],
+    ["Saturday", /\bsat(urday)?\b/i],
+    ["Sunday", /\bsun(day)?\b/i]
+  ];
+
+  // e.g. "9:00am - 5:00pm", "9 - 5pm", "9:00 – 17:00"
+  const TIME_RANGE_RE = /(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?\s*[-–—]\s*(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?/i;
+
+  function to24Hour(hour, minute, meridiem, fallbackMeridiem) {
+    let h = parseInt(hour, 10);
+    const m = minute ? parseInt(minute, 10) : 0;
+    const mer = (meridiem || fallbackMeridiem || "").toLowerCase();
+
+    if (mer === "p" && h < 12) h += 12;
+    if (mer === "a" && h === 12) h = 0;
+    // No AM/PM anywhere on the line and hour looks like a 24h value already — leave as-is.
+    // Otherwise, bare small numbers with no meridiem default to PM (shift schedules
+    // are overwhelmingly afternoon/evening, and this only affects the draft the
+    // user reviews before confirming).
+    if (!mer && h > 0 && h < 8) h += 12;
+
+    return `${String(h % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  const lines = rawText.split("\n").map(line => line.trim()).filter(Boolean);
+  const drafts = [];
+  let currentDay = null;
+
+  for (const line of lines) {
+    const dayMatch = DAY_PATTERNS.find(([, re]) => re.test(line));
+    if (dayMatch) currentDay = dayMatch[0];
+
+    if (dayMatch && /\boff\b/i.test(line)) continue;
+    if (!currentDay) continue;
+
+    const timeMatch = line.match(TIME_RANGE_RE);
+    if (!timeMatch) continue;
+
+    const [full, sh, sm, sMer, eh, em, eMer] = timeMatch;
+    const start = to24Hour(sh, sm, sMer, eMer);
+    const end = to24Hour(eh, em, eMer, sMer);
+
+    let job = line.replace(full, "");
+    const dayLabel = dayMatch ? dayMatch[0] : "";
+    job = job.replace(new RegExp(dayLabel, "i"), "");
+    job = job.replace(/[^a-zA-Z0-9&' ]/g, " ").replace(/\s+/g, " ").trim();
+
+    drafts.push({
+      day: currentDay,
+      job: job.length > 1 && job.length < 40 ? job : "",
+      start,
+      end,
+      hours: hoursBetween(start, end),
+      rate: null
+    });
+  }
+
+  return drafts;
+}
+
+function renderScanResults() {
+  const container = document.getElementById("scanResults");
+
+  if (!scannedDraftShifts.length) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  container.innerHTML = `
+    ${scannedDraftShifts.map((s, i) => `
+      <div class="shift" style="flex-wrap:wrap; align-items:flex-start;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; flex:1; min-width:220px;">
+          <select onchange="updateDraftShift(${i}, 'day', this.value)">
+            ${DAYS.map(d => `<option ${d === s.day ? "selected" : ""}>${d}</option>`).join("")}
+          </select>
+          <input type="text" value="${escapeHtml(s.job)}" placeholder="Job" oninput="updateDraftShift(${i}, 'job', this.value)">
+          <input type="time" value="${s.start}" onchange="updateDraftShift(${i}, 'start', this.value)">
+          <input type="time" value="${s.end}" onchange="updateDraftShift(${i}, 'end', this.value)">
+        </div>
+        <button class="del-btn" onclick="removeDraftShift(${i})" title="Remove this row">✕</button>
+      </div>
+    `).join("")}
+    <button style="margin-top:10px;" onclick="confirmDraftShifts()">
+      ✓ Add ${scannedDraftShifts.length} Shift${scannedDraftShifts.length === 1 ? "" : "s"} to ${formatWeekLabel(currentWeekOffset)}
+    </button>
+  `;
+}
+
+function updateDraftShift(index, field, value) {
+  const shift = scannedDraftShifts[index];
+  if (!shift) return;
+
+  shift[field] = value;
+  if (field === "start" || field === "end") shift.hours = hoursBetween(shift.start, shift.end);
+}
+
+function removeDraftShift(index) {
+  scannedDraftShifts.splice(index, 1);
+
+  if (!scannedDraftShifts.length) {
+    document.getElementById("scanResults").style.display = "none";
+    document.getElementById("scanStatus").textContent = "";
+    return;
+  }
+
+  renderScanResults();
+}
+
+async function confirmDraftShifts() {
+  const key = weekKey(currentWeekOffset);
+  if (!data.weeks[key]) data.weeks[key] = [];
+
+  scannedDraftShifts.forEach(draft => {
+    const job = draft.job || "Imported shift";
+    const rate = draft.rate ?? data.jobRates[job] ?? null;
+
+    data.weeks[key].push({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      day: draft.day,
+      job,
+      start: draft.start,
+      end: draft.end,
+      hours: hoursBetween(draft.start, draft.end),
+      rate
+    });
+  });
+
+  const count = scannedDraftShifts.length;
+  scannedDraftShifts = [];
+
+  document.getElementById("scanResults").style.display = "none";
+  document.getElementById("scanStatus").textContent = "";
+  document.getElementById("scheduleImageInput").value = "";
+
+  saveLocalData();
+  render();
+
+  const saved = await saveCloudData();
+  showToast(saved ? `${count} shift(s) added ✓` : `${count} shift(s) added locally, cloud save failed`);
+}
+
+// ---------------------------------------------------------------------
+// Paycheck / tax estimate card.
+// ---------------------------------------------------------------------
+
+function populateTaxStateOptions() {
+  const select = document.getElementById("taxState");
+  select.innerHTML = US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
+}
+
+function loadTaxSettingsIntoForm() {
+  const settings = data.taxSettings || {};
+
+  document.getElementById("taxState").value = settings.state || "";
+  document.getElementById("taxFilingStatus").value = settings.filingStatus || "single";
+  document.getElementById("taxPeriods").value = String(settings.periods || 26);
+
+  if (settings.annualIncome != null) {
+    document.getElementById("taxAnnualIncome").value = settings.annualIncome;
+  } else {
+    const key = weekKey(currentWeekOffset);
+    const shifts = data.weeks[key] || [];
+    const weeklyPay = shifts.reduce((sum, s) => sum + ((Number(s.hours) || 0) * (Number(s.rate) || 0)), 0);
+    document.getElementById("taxAnnualIncome").value = weeklyPay > 0 ? Math.round(weeklyPay * 52) : "";
+  }
+
+  recalcTaxSummary();
+}
+
+function onTaxSettingsChange() {
+  data.taxSettings = {
+    state: document.getElementById("taxState").value,
+    filingStatus: document.getElementById("taxFilingStatus").value,
+    periods: Number(document.getElementById("taxPeriods").value) || 26,
+    annualIncome: Number(document.getElementById("taxAnnualIncome").value) || null
+  };
+
+  recalcTaxSummary();
+  saveLocalData();
+  saveCloudData();
+}
+
+function recalcTaxSummary() {
+  const summaryEl = document.getElementById("taxSummary");
+  const annualIncome = Number(document.getElementById("taxAnnualIncome").value) || 0;
+
+  if (!annualIncome) {
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see a breakdown.</div>`;
+    return;
+  }
+
+  const result = estimatePaycheck({
+    annualGross: annualIncome,
+    filingStatus: document.getElementById("taxFilingStatus").value,
+    stateCode: document.getElementById("taxState").value,
+    periodsPerYear: Number(document.getElementById("taxPeriods").value) || 26
+  });
+
+  summaryEl.innerHTML = `
+    <div class="stat"><div class="stat-value">$${result.perPeriod.gross.toFixed(2)}</div><div class="stat-label">Gross / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.perPeriod.net.toFixed(2)}</div><div class="stat-label">Est. Net / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${(result.perPeriod.federal + result.perPeriod.state).toFixed(2)}</div><div class="stat-label">Income Tax / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.perPeriod.fica.toFixed(2)}</div><div class="stat-label">FICA / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.federal.toFixed(0)}</div><div class="stat-label">Federal Tax / Year</div></div>
+    <div class="stat"><div class="stat-value">$${result.state.toFixed(0)}</div><div class="stat-label">State Tax / Year</div></div>
+    <div class="stat"><div class="stat-value">$${result.fica.total.toFixed(0)}</div><div class="stat-label">FICA / Year</div></div>
+    <div class="stat"><div class="stat-value">$${result.netAnnual.toFixed(0)}</div><div class="stat-label">Est. Net / Year</div></div>
+  `;
 }
 
 function changeWeek(delta) {
@@ -1071,12 +1448,17 @@ function renderSingleWeek() {
                 ${shift.rate ? ` · $${((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2)}` : ""}
               </span>
             </div>
-            <button class="del-btn" onclick="deleteShift(${Number(shift.id)})">✕</button>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+              <button class="del-btn" onclick="startEditShift(${Number(shift.id)})" title="Edit shift">✎</button>
+              <button class="del-btn" onclick="deleteShift(${Number(shift.id)})" title="Delete shift">✕</button>
+            </div>
           </div>
         `).join("")}
       </div>
     `;
   }).join("");
+
+  loadTaxSettingsIntoForm();
 }
 
 function render() {
@@ -1224,8 +1606,17 @@ window.deleteShift = deleteShift;
 window.downloadWeekPDF = downloadWeekPDF;
 window.setSchedulePublished = setSchedulePublished;
 window.changeFriendWeek = changeFriendWeek;
+window.startEditShift = startEditShift;
+window.cancelEditShift = cancelEditShift;
+window.scanScheduleImage = scanScheduleImage;
+window.updateDraftShift = updateDraftShift;
+window.removeDraftShift = removeDraftShift;
+window.confirmDraftShifts = confirmDraftShifts;
+window.onTaxSettingsChange = onTaxSettingsChange;
+window.recalcTaxSummary = recalcTaxSummary;
 
 (async () => {
+  populateTaxStateOptions();
   if (friendMode) return;
   await checkStorage();
   loadLocalData();
