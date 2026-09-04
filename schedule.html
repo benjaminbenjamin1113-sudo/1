@@ -915,8 +915,14 @@ async function scanScheduleImage() {
   statusEl.textContent = "Loading text recognition… (first scan can take a few seconds)";
 
   try {
-    const { createWorker } = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
-    const worker = await createWorker("eng");
+    // Tesseract.js's ESM build only exports a default export (an object
+    // with createWorker etc. as properties) — not a named `createWorker`
+    // export — confirmed by inspecting the actual published package.
+    // Destructuring `{ createWorker }` from the import leaves it
+    // `undefined`, which is why every scan has failed with the same
+    // "createWorker is not a function" error regardless of the image.
+    const { default: Tesseract } = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
+    const worker = await Tesseract.createWorker("eng");
 
     statusEl.textContent = "Reading the image…";
     const processedImage = await preprocessImageForOcr(file).catch(() => file);
