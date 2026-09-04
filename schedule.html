@@ -951,13 +951,24 @@ async function scanScheduleImage() {
 
     statusEl.textContent = "Reading the image…";
     const processedImage = await preprocessImageForOcr(file).catch(() => file);
-    const { data } = await worker.recognize(processedImage);
+    const firstPass = await worker.recognize(processedImage);
+
+    // Re-read the same image a second time under "sparse text" mode before
+    // concluding anything is missing. Mode 6 and mode 11 trip over
+    // different UI elements, so a day that's genuinely off still reads
+    // empty in both passes, while a shift mode 6 missed often turns up in
+    // mode 11 — this catches those instead of taking a single read's word
+    // as final and silently guessing "day off".
+    statusEl.textContent = "Double-checking the image…";
+    await worker.setParameters({ tessedit_pageseg_mode: "11" });
+    const secondPass = await worker.recognize(processedImage);
     await worker.terminate();
 
     statusEl.textContent = "Looking for shifts…";
-    const words = data.words || [];
+    const words = mergeOcrWords(firstPass.data.words || [], secondPass.data.words || []);
+    const combinedText = `${firstPass.data.text || ""}\n${secondPass.data.text || ""}`;
     let drafts = parseScheduleGrid(words);
-    if (!drafts.length) drafts = parseScheduleText(data.text || "");
+    if (!drafts.length) drafts = parseScheduleText(combinedText);
 
     if (!drafts.length) {
       // Surfaces what OCR actually read (not just "it failed") so a
@@ -965,11 +976,11 @@ async function scanScheduleImage() {
       // (image-quality problem) or came out clean but didn't match either
       // parser's patterns (a parsing-logic problem) — those need very
       // different fixes and looked identical before this.
-      console.error("Schedule scan found no shifts. Raw OCR text:", data.text);
+      console.error("Schedule scan found no shifts. Raw OCR text:", combinedText);
       console.error("Word count:", words.length, "| words:", words.map(w => w.text));
       statusEl.className = "sync-status error";
-      const preview = (data.text || "").replace(/\s+/g, " ").trim().slice(0, 200);
-      statusEl.innerHTML = `Couldn't find any recognizable shifts in that image. Try a clearer, more cropped screenshot, or add shifts manually above.<br><br><span style="opacity:0.7; font-size:11px;">What was read (${words.length} words): "${escapeHtml(preview) || "(nothing readable)"}"</span>`;
+      const preview = combinedText.replace(/\s+/g, " ").trim().slice(0, 200);
+      statusEl.innerHTML = `Couldn't find any recognizable shifts in that image, even after rereading it. Try a clearer, more cropped screenshot, or add shifts manually above.<br><br><span style="opacity:0.7; font-size:11px;">What was read (${words.length} words): "${escapeHtml(preview) || "(nothing readable)"}"</span>`;
       document.getElementById("scanResults").style.display = "none";
       return;
     }
@@ -977,11 +988,14 @@ async function scanScheduleImage() {
     scannedDraftShifts = drafts;
     statusEl.className = "sync-status success";
 
-    const missing = drafts.filter(d => d.durationGuessed && d.end === d.start).length;
-    const guessed = drafts.filter(d => d.durationGuessed && d.end !== d.start).length;
-    let msg = `Found ${drafts.length} possible shift${drafts.length === 1 ? "" : "s"} — review and edit before adding.`;
-    if (guessed) msg += ` ${guessed} end time${guessed === 1 ? "" : "s"} guessed from your past shifts at that start time (marked below) — double-check ${guessed === 1 ? "it" : "them"}.`;
+    const dayOffs = drafts.filter(d => d.possibleDayOff).length;
+    const shiftDrafts = drafts.filter(d => !d.possibleDayOff);
+    const missing = shiftDrafts.filter(d => d.durationGuessed && d.end === d.start).length;
+    const guessed = shiftDrafts.filter(d => d.durationGuessed && d.end !== d.start).length;
+    let msg = `Found ${shiftDrafts.length} possible shift${shiftDrafts.length === 1 ? "" : "s"} — review and edit before adding.`;
+    if (guessed) msg += ` ${guessed} end time${guessed === 1 ? "" : "s"} guessed from your past shifts at that start time (marked below) — actual hours may differ if you left early or stayed late, so double-check ${guessed === 1 ? "it" : "them"}.`;
     if (missing) msg += ` ${missing} shift${missing === 1 ? "" : "s"} had no end time anywhere in the image and no history to guess from — fill ${missing === 1 ? "it" : "them"} in (highlighted below).`;
+    if (dayOffs) msg += ` ${dayOffs} day${dayOffs === 1 ? "" : "s"} had no shift time even after rereading the image, marked below — confirm ${dayOffs === 1 ? "it's" : "they're"} actually day${dayOffs === 1 ? "" : "s"} off, or add the shift if not.`;
     statusEl.textContent = msg;
     renderScanResults();
   } catch (error) {
@@ -994,6 +1008,25 @@ async function scanScheduleImage() {
     const detail = (error && (error.message || String(error))) || "unknown error";
     statusEl.textContent = `Couldn't read that image (${detail}). Try again, or add shifts manually above.`;
   }
+}
+
+// Combines the word lists from two OCR passes (different page-segmentation
+// modes read different parts of the same screenshot cleanly) into one list,
+// deduping anything both passes already agree on. Position is rounded
+// before comparing since the exact same glyph rarely gets identical
+// bounding-box pixels across two different recognition modes.
+function mergeOcrWords(a, b) {
+  const keyOf = w => `${(w.text || "").trim()}|${Math.round(w.bbox.x0 / 6)}|${Math.round(w.bbox.y0 / 6)}`;
+  const merged = [...a];
+  const seen = new Set(a.map(keyOf));
+  for (const w of b) {
+    const key = keyOf(w);
+    if (!seen.has(key)) {
+      merged.push(w);
+      seen.add(key);
+    }
+  }
+  return merged;
 }
 
 const SCHEDULE_DAY_PATTERNS = [
@@ -1092,7 +1125,16 @@ function parseScheduleGrid(words) {
     const colText = col.words.map(w => w.text).join(" ");
 
     const timeMatch = colText.match(SINGLE_TIME_RE);
-    if (!timeMatch) continue; // no time found in this column — likely a day off
+    if (!timeMatch) {
+      // No time found in this column even after two OCR passes over the
+      // image (see mergeOcrWords above). That's still only an inference —
+      // a "day off" icon is a graphic, not text, so there's no way to
+      // confirm it from OCR output either way — so this surfaces as a row
+      // the user has to actually confirm or correct, instead of the app
+      // quietly deciding the day was off on its behalf.
+      drafts.push({ day: col.day, job: "", start: "", end: "", hours: 0, rate: null, possibleDayOff: true });
+      continue;
+    }
 
     const [, hStr, mStr, mer] = timeMatch;
     const { h, m, label: start } = singleTimeTo24Hour(hStr, mStr, mer);
@@ -1196,11 +1238,30 @@ function renderScanResults() {
     return;
   }
 
+  const addCount = scannedDraftShifts.filter(s => !(s.possibleDayOff && !s.start)).length;
+
   container.style.display = "block";
   container.innerHTML = `
     ${scannedDraftShifts.map((s, i) => {
+      if (s.possibleDayOff && !s.start) {
+        return `
+        <div class="shift" style="flex-wrap:wrap; align-items:center;">
+          <div style="flex:1; min-width:220px; font-size:13px;">
+            <strong>${s.day}</strong> — no shift time found for this day, even after rereading the image.
+            <div style="margin-top:2px; color:var(--text-dim); font-size:12px;">Leave this as-is if it really was a day off — it won't be added. If you did work, enter the time:</div>
+            <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+              <input type="time" onchange="updateDraftShift(${i}, 'start', this.value)">
+              <input type="time" onchange="updateDraftShift(${i}, 'end', this.value)">
+            </div>
+          </div>
+          <button class="del-btn" onclick="removeDraftShift(${i})" title="Dismiss this row">✕</button>
+        </div>
+        `;
+      }
+
       const missingEnd = s.durationGuessed && s.end === s.start;
       const guessedEnd = s.durationGuessed && s.end !== s.start;
+      const actualDuration = !s.durationGuessed;
       const endStyle = missingEnd ? "border-color:var(--danger);" : guessedEnd ? "border-color:var(--accent);" : "";
       return `
       <div class="shift" style="flex-wrap:wrap; align-items:flex-start;">
@@ -1212,14 +1273,15 @@ function renderScanResults() {
           <input type="time" value="${s.start}" onchange="updateDraftShift(${i}, 'start', this.value)">
           <input type="time" value="${s.end}" onchange="updateDraftShift(${i}, 'end', this.value)" style="${endStyle}">
           ${missingEnd ? `<div style="grid-column:1/-1; font-size:11px; color:#ff8a8f;">⚠️ No end time found in the image — set one</div>` : ""}
-          ${guessedEnd ? `<div style="grid-column:1/-1; font-size:11px; color:var(--accent);">Guessed from a past shift starting at this time — double-check</div>` : ""}
+          ${guessedEnd ? `<div style="grid-column:1/-1; font-size:11px; color:var(--accent);">Guessed from a past shift starting at this time — actual hours may differ if you left early or stayed late, so double-check</div>` : ""}
+          ${actualDuration ? `<div style="grid-column:1/-1; font-size:11px; color:var(--success);">✓ Actual worked hours read from the image</div>` : ""}
         </div>
         <button class="del-btn" onclick="removeDraftShift(${i})" title="Remove this row">✕</button>
       </div>
     `;
     }).join("")}
     <button style="margin-top:10px;" onclick="confirmDraftShifts()">
-      ✓ Add ${scannedDraftShifts.length} Shift${scannedDraftShifts.length === 1 ? "" : "s"} to ${formatWeekLabel(currentWeekOffset)}
+      ✓ Add ${addCount} Shift${addCount === 1 ? "" : "s"} to ${formatWeekLabel(currentWeekOffset)}
     </button>
   `;
 }
@@ -1227,6 +1289,20 @@ function renderScanResults() {
 function updateDraftShift(index, field, value) {
   const shift = scannedDraftShifts[index];
   if (!shift) return;
+
+  // Typing a start time onto a "possible day off" row means the user is
+  // telling us the day wasn't actually off — switch it over to a normal
+  // editable shift row (flagged as missing an end time, same as any other
+  // shift with no duration info) instead of a special case.
+  if (shift.possibleDayOff && field === "start" && value) {
+    shift.possibleDayOff = false;
+    shift.durationGuessed = true;
+    shift.start = value;
+    shift.end = value;
+    shift.hours = 0;
+    renderScanResults();
+    return;
+  }
 
   shift[field] = value;
   if (field === "start" || field === "end") shift.hours = hoursBetween(shift.start, shift.end);
@@ -1256,6 +1332,11 @@ async function confirmDraftShifts() {
   if (!data.weeks[key]) data.weeks[key] = [];
 
   scannedDraftShifts.forEach(draft => {
+    // Rows left as an unconfirmed "possible day off" (no start time ever
+    // entered) aren't a shift to add — they're just how a day with no
+    // detected time is surfaced for review.
+    if (draft.possibleDayOff && !draft.start) return;
+
     const job = draft.job || "Imported shift";
     const rate = draft.rate ?? data.jobRates[job] ?? null;
 
@@ -1270,7 +1351,7 @@ async function confirmDraftShifts() {
     });
   });
 
-  const count = scannedDraftShifts.length;
+  const count = scannedDraftShifts.filter(d => !(d.possibleDayOff && !d.start)).length;
   scannedDraftShifts = [];
 
   document.getElementById("scanResults").style.display = "none";
