@@ -843,7 +843,63 @@ async function deleteShift(id) {
 // a heuristic parser over the recognized text looking for "day name" +
 // "time range" patterns. Nothing gets added to the schedule until the
 // user reviews/edits the draft rows and confirms.
+//
+// Two source formats are supported:
+//  1. Plain text schedules ("Monday 9:00am - 5:00pm") — parseScheduleText,
+//     line-based.
+//  2. Grid/table schedules from scheduling apps (Krowd, HotSchedules,
+//     etc.) with a day-abbreviation header row and a start time + separate
+//     duration per column, no "-" range — parseScheduleGrid, which uses
+//     each word's on-image position (not just reading order) to figure out
+//     which day column it belongs to, since OCR on a table reads roughly
+//     row-by-row (all day labels, then all times, then all durations) and
+//     line-based day-then-time matching doesn't work on that ordering.
+// parseScheduleGrid runs first since it degrades safely (returns nothing)
+// on non-grid images; parseScheduleText is the fallback either way.
 // ---------------------------------------------------------------------
+
+// App-schedule screenshots are usually small with tight, low-contrast text
+// in each grid cell — confirmed by direct testing that Tesseract reads
+// those cells as pure gibberish at native size, but cleanly once upscaled
+// and contrast-stretched. Returns a canvas (Tesseract.js accepts one
+// directly) rather than mutating the original file.
+function preprocessImageForOcr(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.max(1, Math.min(4, 1400 / img.naturalWidth));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const px = imgData.data;
+      let min = 255, max = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        const gray = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        px[i] = px[i + 1] = px[i + 2] = gray;
+        if (gray < min) min = gray;
+        if (gray > max) max = gray;
+      }
+      const range = Math.max(1, max - min);
+      for (let i = 0; i < px.length; i += 4) {
+        const stretched = ((px[i] - min) / range) * 255;
+        px[i] = px[i + 1] = px[i + 2] = stretched;
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      URL.revokeObjectURL(img.src);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
 
 async function scanScheduleImage() {
   const fileInput = document.getElementById("scheduleImageInput");
@@ -863,11 +919,13 @@ async function scanScheduleImage() {
     const worker = await createWorker("eng");
 
     statusEl.textContent = "Reading the image…";
-    const { data: { text } } = await worker.recognize(file);
+    const processedImage = await preprocessImageForOcr(file).catch(() => file);
+    const { data } = await worker.recognize(processedImage);
     await worker.terminate();
 
     statusEl.textContent = "Looking for shifts…";
-    const drafts = parseScheduleText(text);
+    let drafts = parseScheduleGrid(data.words || []);
+    if (!drafts.length) drafts = parseScheduleText(data.text || "");
 
     if (!drafts.length) {
       statusEl.className = "sync-status error";
@@ -878,13 +936,105 @@ async function scanScheduleImage() {
 
     scannedDraftShifts = drafts;
     statusEl.className = "sync-status success";
-    statusEl.textContent = `Found ${drafts.length} possible shift${drafts.length === 1 ? "" : "s"} — review and edit before adding.`;
+    statusEl.textContent = `Found ${drafts.length} possible shift${drafts.length === 1 ? "" : "s"} — review and edit before adding. Days with no duration text default to a 0-length end time — fix those before confirming.`;
     renderScanResults();
   } catch (error) {
     console.error("Schedule scan failed:", error);
     statusEl.className = "sync-status error";
     statusEl.textContent = "Couldn't read that image. Try again, or add shifts manually above.";
   }
+}
+
+const SCHEDULE_DAY_PATTERNS = [
+  ["Monday", /^mon(day)?\.?$/i],
+  ["Tuesday", /^tues?(day)?\.?$/i],
+  ["Wednesday", /^wed(nesday)?\.?$/i],
+  ["Thursday", /^thu(r|rs|rsday)?\.?$/i],
+  ["Friday", /^fri(day)?\.?$/i],
+  ["Saturday", /^sat(urday)?\.?$/i],
+  ["Sunday", /^sun(day)?\.?$/i]
+];
+
+// e.g. "4:30 PM" — a single time, not a range. Used for grid schedules
+// that show a start time plus a separate duration instead of "X - Y".
+const SINGLE_TIME_RE = /(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m?\.?/i;
+// e.g. "4h 48m", "6h12m", "4 h 8 m"
+const DURATION_RE = /(\d{1,2})\s*h\s*(\d{1,2})?\s*m?/i;
+
+function singleTimeTo24Hour(hStr, mStr, mer) {
+  let h = parseInt(hStr, 10);
+  const m = mStr ? parseInt(mStr, 10) : 0;
+  if (mer.toLowerCase() === "p" && h < 12) h += 12;
+  if (mer.toLowerCase() === "a" && h === 12) h = 0;
+  return { h, m, label: `${String(h % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}` };
+}
+
+// Reconstructs a day-column grid (Krowd, HotSchedules, and similar
+// scheduling-app screenshots) from Tesseract's word-level bounding boxes.
+// OCR on a table like this reads roughly row-by-row — every day label,
+// then every date, then every time, then every duration — so matching
+// "the next time after a day label" (as parseScheduleText does) pairs
+// every shift with the wrong day. Instead, each day header's x-position
+// defines a column, and every other word gets bucketed into whichever
+// day-column it's horizontally closest to, then read top-to-bottom within
+// that bucket. A day with no shift naturally produces no time match and
+// is skipped, rather than shifting every later day over by one.
+function parseScheduleGrid(words) {
+  if (!words || words.length < 4) return [];
+
+  const dayWords = words.filter(w => SCHEDULE_DAY_PATTERNS.some(([, re]) => re.test((w.text || "").trim())));
+  // Need at least 2 day-column headers to treat this as a grid at all —
+  // otherwise this isn't that kind of screenshot, and parseScheduleText's
+  // line-based approach is the right tool instead.
+  if (dayWords.length < 2) return [];
+
+  const columns = dayWords.map(w => ({
+    day: SCHEDULE_DAY_PATTERNS.find(([, re]) => re.test(w.text.trim()))[0],
+    x: (w.bbox.x0 + w.bbox.x1) / 2,
+    words: [w]
+  })).sort((a, b) => a.x - b.x);
+
+  const gaps = [];
+  for (let i = 1; i < columns.length; i++) gaps.push(columns[i].x - columns[i - 1].x);
+  const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : Infinity;
+  const maxDist = avgGap * 0.7;
+
+  const dayWordSet = new Set(dayWords);
+  for (const w of words) {
+    if (dayWordSet.has(w)) continue;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    let nearest = null, nearestDist = Infinity;
+    for (const col of columns) {
+      const dist = Math.abs(cx - col.x);
+      if (dist < nearestDist) { nearestDist = dist; nearest = col; }
+    }
+    if (nearest && nearestDist <= maxDist) nearest.words.push(w);
+  }
+
+  const drafts = [];
+  for (const col of columns) {
+    col.words.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+    const colText = col.words.map(w => w.text).join(" ");
+
+    const timeMatch = colText.match(SINGLE_TIME_RE);
+    if (!timeMatch) continue; // no time found in this column — likely a day off
+
+    const [, hStr, mStr, mer] = timeMatch;
+    const { h, m, label: start } = singleTimeTo24Hour(hStr, mStr, mer);
+
+    const durMatch = colText.match(DURATION_RE);
+    let end = start; // no duration text found — leave a 0-length shift as a visible flag to fix in review
+    if (durMatch) {
+      const durH = parseInt(durMatch[1], 10) || 0;
+      const durM = durMatch[2] ? parseInt(durMatch[2], 10) : 0;
+      const totalMin = (h * 60 + m + durH * 60 + durM) % (24 * 60);
+      end = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+    }
+
+    drafts.push({ day: col.day, job: "", start, end, hours: hoursBetween(start, end), rate: null });
+  }
+
+  return drafts;
 }
 
 function parseScheduleText(rawText) {
