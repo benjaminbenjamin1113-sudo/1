@@ -923,6 +923,16 @@ async function scanScheduleImage() {
     // "createWorker is not a function" error regardless of the image.
     const { default: Tesseract } = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
     const worker = await Tesseract.createWorker("eng");
+    // Tesseract's default page-segmentation mode does full-page layout
+    // analysis (built for scanned documents) and, on app screenshots,
+    // reliably misclassifies bordered/circled UI elements (date circles,
+    // time boxes) as non-text graphics — dropping them from the output
+    // entirely with no garbling or error to signal it happened. "Single
+    // uniform block of text" mode skips that layout analysis and reads
+    // them correctly. Confirmed directly: identical test image went from
+    // reading only the day-label row to reading every time box cleanly
+    // after this one setting change.
+    await worker.setParameters({ tessedit_pageseg_mode: "6" });
 
     statusEl.textContent = "Reading the image…";
     const processedImage = await preprocessImageForOcr(file).catch(() => file);
