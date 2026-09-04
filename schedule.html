@@ -941,7 +941,12 @@ async function scanScheduleImage() {
   } catch (error) {
     console.error("Schedule scan failed:", error);
     statusEl.className = "sync-status error";
-    statusEl.textContent = "Couldn't read that image. Try again, or add shifts manually above.";
+    // Includes the real error text (not just a generic message) so a
+    // screenshot of this actually tells us what broke — CDN blocked,
+    // worker creation failed, image format rejected, etc. — instead of
+    // every distinct failure looking identical from the outside.
+    const detail = (error && (error.message || String(error))) || "unknown error";
+    statusEl.textContent = `Couldn't read that image (${detail}). Try again, or add shifts manually above.`;
   }
 }
 
