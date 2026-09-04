@@ -930,12 +930,21 @@ async function scanScheduleImage() {
     await worker.terminate();
 
     statusEl.textContent = "Looking for shifts…";
-    let drafts = parseScheduleGrid(data.words || []);
+    const words = data.words || [];
+    let drafts = parseScheduleGrid(words);
     if (!drafts.length) drafts = parseScheduleText(data.text || "");
 
     if (!drafts.length) {
+      // Surfaces what OCR actually read (not just "it failed") so a
+      // screenshot of this tells us whether the text came out garbled
+      // (image-quality problem) or came out clean but didn't match either
+      // parser's patterns (a parsing-logic problem) — those need very
+      // different fixes and looked identical before this.
+      console.error("Schedule scan found no shifts. Raw OCR text:", data.text);
+      console.error("Word count:", words.length, "| words:", words.map(w => w.text));
       statusEl.className = "sync-status error";
-      statusEl.textContent = "Couldn't find any recognizable shifts in that image. Try a clearer, more cropped screenshot, or add shifts manually above.";
+      const preview = (data.text || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      statusEl.innerHTML = `Couldn't find any recognizable shifts in that image. Try a clearer, more cropped screenshot, or add shifts manually above.<br><br><span style="opacity:0.7; font-size:11px;">What was read (${words.length} words): "${escapeHtml(preview) || "(nothing readable)"}"</span>`;
       document.getElementById("scanResults").style.display = "none";
       return;
     }
