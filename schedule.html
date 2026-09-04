@@ -882,8 +882,14 @@ function preprocessImageForOcr(file) {
       canvas.height = Math.round(img.naturalHeight * scale);
 
       const ctx = canvas.getContext("2d");
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = "high";
+      // Smooth/high-quality interpolation was blurring small UI text (thin
+      // time-box borders, tight digits) just enough for Tesseract's layout
+      // analysis to drop it entirely rather than misread it — confirmed by
+      // direct testing: identical screenshot went from losing every time box
+      // (only day names/dates survived) to reading everything cleanly once
+      // smoothing was turned off. Nearest-neighbor keeps edges crisp, which
+      // matters far more than smoothness for already-legible screenshot text.
+      ctx.imageSmoothingEnabled = false;
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
