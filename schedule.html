@@ -4,154 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weekly Schedule Tracker</title>
+<link rel="stylesheet" href="./shared/base.css">
 
 <style>
-  :root {
-    --bg: #0f1115;
-    --card: #1a1d24;
-    --card-hover: #21252e;
-    --accent: #ff8a3d;
-    --accent-soft: #3a2a1e;
-    --text: #eceef2;
-    --text-dim: #9aa0ab;
-    --border: #2a2e38;
-    --danger: #e5484d;
-    --success: #4ade80;
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0 auto;
-    max-width: 720px;
-    padding: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-  }
-
-  h1 { margin: 0 0 4px; font-size: 22px; }
-
-  .subtitle {
-    margin-bottom: 8px;
-    color: var(--text-dim);
-    font-size: 14px;
-  }
-
-  .dashboard-link {
-    display: inline-block;
-    margin-bottom: 10px;
-    color: var(--accent);
-    font-size: 13px;
-    text-decoration: none;
-  }
-
-  .dashboard-link:hover { text-decoration: underline; }
-
-  .sync-status {
-    min-height: 18px;
-    margin-bottom: 14px;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-
-  .sync-status.success { color: var(--success); }
-  .sync-status.error { color: #ff8a8f; }
-
-  .storage-warning {
-    display: none;
-    margin-bottom: 16px;
-    padding: 12px 14px;
-    border: 1px solid var(--danger);
-    border-radius: 10px;
-    background: rgba(229,72,77,0.15);
-    color: #ff8a8f;
-    font-size: 13px;
-  }
-
-  .storage-warning.show { display: block; }
-
-  .card, .auth-card {
-    margin-bottom: 16px;
-    padding: 16px;
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    background: var(--card);
-  }
-
-  .form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-    margin-bottom: 10px;
-  }
-
-  label {
-    display: block;
-    margin-bottom: 4px;
-    color: var(--text-dim);
-    font-size: 12px;
-  }
-
-  input, select {
-    width: 100%;
-    padding: 8px 10px;
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    outline: none;
-    background: #12141a;
-    color: var(--text);
-    font-size: 14px;
-  }
-
-  input:focus, select:focus { border-color: var(--accent); }
-
-  button {
-    width: 100%;
-    padding: 10px 16px;
-    border: none;
-    border-radius: 8px;
-    background: var(--accent);
-    color: #1a1005;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  button:hover { opacity: .9; }
-
-  button.secondary {
-    width: auto;
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-dim);
-  }
+  .dashboard-link { margin-bottom: 10px; }
 
   button.active {
     border-color: var(--accent);
     background: var(--accent);
     color: #1a1005;
   }
-
-  .auth-header {
-    margin-bottom: 12px;
-    color: var(--text-dim);
-    font-size: 14px;
-    font-weight: 600;
-  }
-
-  .auth-link {
-    display: block;
-    margin-top: 10px;
-    color: var(--accent);
-    cursor: pointer;
-    font-size: 12px;
-    text-align: center;
-    text-decoration: underline;
-  }
-
-  .auth-user-info { font-size: 13px; }
-  .auth-user-info span { color: var(--accent); font-weight: 600; }
 
   .view-nav, .week-nav {
     display: flex;
@@ -265,27 +127,27 @@
     text-align: center;
   }
 
-  .toast {
-    position: fixed;
-    z-index: 9999;
-    bottom: 20px;
-    left: 50%;
-    padding: 10px 18px;
-    border: 1px solid var(--accent);
-    border-radius: 20px;
-    background: var(--card);
-    font-size: 13px;
-    opacity: 0;
-    pointer-events: none;
-    transform: translateX(-50%);
-    transition: opacity .3s;
+  .visibility-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .visibility-copy { flex: 1; }
+  .visibility-title { font-size: 14px; font-weight: 700; }
+  .visibility-desc { margin-top: 2px; color: var(--text-dim); font-size: 12px; line-height: 1.4; }
+  .switch { position: relative; display: inline-block; width: 46px; height: 26px; flex: none; }
+  .switch input { display: none; }
+  .switch-track {
+    position: absolute; inset: 0; border-radius: 999px; background: #2a2e38;
+    cursor: pointer; transition: background 0.2s;
   }
-
-  .toast.show { opacity: 1; }
-
-  @media (max-width: 520px) {
-    .form-row { grid-template-columns: 1fr; }
+  .switch-track::before {
+    content: ""; position: absolute; left: 3px; top: 3px; width: 20px; height: 20px;
+    border-radius: 50%; background: var(--text-dim); transition: transform 0.2s, background 0.2s;
   }
+  .switch input:checked + .switch-track { background: var(--accent-soft); }
+  .switch input:checked + .switch-track::before { transform: translateX(20px); background: var(--accent); }
+
+  .private-state { padding: 40px 16px; text-align: center; color: var(--text-dim); font-size: 14px; }
+  .private-state .icon { margin-bottom: 10px; font-size: 32px; }
+  .friend-view-label { color: var(--text-dim); font-size: 13px; }
+
 </style>
 </head>
 
@@ -303,43 +165,61 @@
   Use a normal browser tab instead of private/incognito mode.
 </div>
 
-<div class="auth-card">
-  <div id="loggedOutForm">
-    <div class="auth-header" id="authTitle">Sign in to sync your schedule</div>
+<div class="auth-card" id="loggedOutForm">
+  <div class="auth-header" id="authTitle">Sign in to sync your schedule</div>
 
-    <div class="form-row">
-      <div>
-        <label for="authUsername">Username</label>
-        <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
-      </div>
-
-      <div>
-        <label for="authPassword">Password</label>
-        <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
-      </div>
+  <div class="form-row">
+    <div>
+      <label for="authUsername">Username</label>
+      <input id="authUsername" type="text" placeholder="e.g. benjamin" autocomplete="username">
     </div>
 
-    <div style="margin-top:12px;">
-      <button id="authBtn" onclick="handleAuth()">Login</button>
+    <div>
+      <label for="authPassword">Password</label>
+      <input id="authPassword" type="password" placeholder="••••••••" autocomplete="current-password">
     </div>
-
-    <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
-      Don't have an account? Sign up
-    </span>
   </div>
 
-  <div id="loggedInView" style="display:none; align-items:center; justify-content:space-between;">
-    <div class="auth-user-info">
-      Cloud synced: <span id="userDisplay"></span>
+  <div style="margin-top:12px;">
+    <button id="authBtn" onclick="handleAuth()">Login</button>
+  </div>
+
+  <span class="auth-link" id="authToggle" onclick="toggleAuthMode()">
+    Don't have an account? Sign up
+  </span>
+</div>
+
+<div class="welcome-banner" id="loggedInView" style="display:none;">
+  <div class="welcome-banner-row">
+    <div>
+      <div class="welcome-title">
+        <span id="greetingWord">Welcome back</span>, <span id="userDisplay"></span>! <span id="greetingEmoji">👋</span>
+      </div>
+      <div class="welcome-sub" id="loggedInSubtext">Your schedule syncs automatically.</div>
     </div>
 
-    <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px;">
-      Logout
-    </button>
+    <div class="welcome-actions">
+      <div id="friendsDropdownRoot"></div>
+      <button class="secondary" onclick="location.href='/profile.html'" style="padding:6px 12px; font-size:12px; width:auto;">Profile</button>
+      <button class="secondary" onclick="handleLogout()" style="padding:6px 12px; font-size:12px; width:auto;">Logout</button>
+    </div>
   </div>
 </div>
 
-<div class="card">
+<div class="card" id="publishCard">
+  <div class="visibility-row">
+    <div class="visibility-copy">
+      <div class="visibility-title">Publish schedule to friends</div>
+      <div class="visibility-desc">When on, your friends can see your shifts and hours — never your pay rate.</div>
+    </div>
+    <label class="switch">
+      <input type="checkbox" id="publishToggle" onchange="setSchedulePublished(this.checked)">
+      <span class="switch-track"></span>
+    </label>
+  </div>
+</div>
+
+<div class="card" id="viewNavCard">
   <div class="view-nav">
     <button class="secondary active" id="btnSingleView" onclick="setView('single')">Single Week</button>
     <button class="secondary" id="btnAllView" onclick="setView('all')">All Weeks</button>
@@ -399,7 +279,20 @@
       <div></div>
     </div>
 
-    <button onclick="addShift()">+ Add Shift</button>
+    <button id="addShiftBtn" onclick="addShift()">+ Add Shift</button>
+    <button id="cancelEditBtn" class="secondary" style="display:none; margin-top:8px;" onclick="cancelEditShift()">Cancel Edit</button>
+  </div>
+
+  <div class="card">
+    <div class="auth-header">📸 Import Shifts from a Screenshot</div>
+    <div class="visibility-desc" style="margin-bottom:10px;">
+      Upload a photo of your posted schedule (a paper schedule, a text message, an app screenshot).
+      We'll scan it for day/time patterns and let you review and edit before anything is added.
+    </div>
+    <input type="file" id="scheduleImageInput" accept="image/*" style="margin-bottom:10px; padding:8px; background:#12141a; border:1px solid var(--border); border-radius:8px; color:var(--text); width:100%;">
+    <button class="secondary" style="width:100%;" onclick="scanScheduleImage()">🔍 Scan Image for Shifts</button>
+    <div class="sync-status" id="scanStatus"></div>
+    <div id="scanResults" style="display:none; margin-top:12px;"></div>
   </div>
 
   <div class="card">
@@ -407,53 +300,138 @@
   </div>
 
   <div class="card" id="shiftList"></div>
+
+  <div class="card">
+    <div class="auth-header">🧾 Paycheck Deductions</div>
+    <div class="visibility-desc" style="margin-bottom:10px;">
+      What actually gets taken out of your paycheck — federal tax, your state's tax (if any), and FICA. A rough planning estimate, not tax advice.
+    </div>
+
+    <div class="form-row">
+      <div>
+        <label for="taxState">State (where you work)</label>
+        <select id="taxState" onchange="onTaxSettingsChange()"></select>
+      </div>
+      <div>
+        <label for="taxFilingStatus">Filing status</label>
+        <select id="taxFilingStatus" onchange="onTaxSettingsChange()">
+          <option value="single">Single</option>
+          <option value="marriedJoint">Married filing jointly</option>
+          <option value="headOfHousehold">Head of household</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="visibility-desc" id="taxStateNote" style="margin-bottom:10px;"></div>
+
+    <div class="form-row">
+      <div>
+        <label for="taxAnnualIncome">Estimated annual pay ($)</label>
+        <input id="taxAnnualIncome" type="number" min="0" step="100" oninput="recalcTaxSummary()" onchange="onTaxSettingsChange()">
+        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; font-weight:400; color:var(--text-dim);">
+          <input type="checkbox" id="taxAutoAnnual" style="width:auto;" onchange="onTaxAutoToggle()">
+          Auto-calculate from this week's scheduled hours × 52
+        </label>
+      </div>
+      <div>
+        <label for="taxPeriods">Pay frequency</label>
+        <select id="taxPeriods" onchange="onTaxSettingsChange()">
+          <option value="52">Weekly</option>
+          <option value="26" selected>Biweekly</option>
+          <option value="24">Semi-monthly</option>
+          <option value="12">Monthly</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="insight-title" style="margin-top:4px;">This week's take-home</div>
+    <div class="visibility-desc" style="margin-bottom:8px;">Based on the hours actually logged for the week you're viewing above, taxed at the effective rate implied by your estimated annual pay.</div>
+    <div class="summary-grid" id="weeklyTaxSummary"></div>
+
+    <div class="insight-title" style="margin-top:14px;">Per-paycheck / per-year estimate</div>
+    <div class="summary-grid" id="taxSummary"></div>
+
+    <div class="insight-title" id="taxBreakdownLabel" style="margin-top:14px; display:none;">Where your paycheck deduction goes</div>
+    <div id="taxDeductionBreakdown"></div>
+  </div>
 </div>
 
 <div id="allWeeksView" style="display:none;"></div>
 <div id="insightsView" style="display:none;"></div>
 
+<div id="friendView" style="display:none;">
+  <div class="card">
+    <div class="friend-view-label" id="friendViewLabel">Viewing schedule</div>
+  </div>
+
+  <div class="card" id="friendUnavailableCard" style="display:none;">
+    <div class="private-state">
+      <div class="icon">🔒</div>
+      <div id="friendUnavailableMsg">This schedule isn't available.</div>
+    </div>
+  </div>
+
+  <div id="friendScheduleContent" style="display:none;">
+    <div class="card">
+      <div class="week-nav">
+        <button class="secondary" onclick="changeFriendWeek(-1)">← Prev</button>
+        <div class="week-label" id="friendWeekLabel"></div>
+        <button class="secondary" onclick="changeFriendWeek(1)">Next →</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="summary-grid" id="friendSummary"></div>
+    </div>
+
+    <div class="card" id="friendShiftList"></div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
 import {
-  getAuth,
+  auth,
+  db,
+  emailToUsername,
+  usernameToEmail,
+  escapeHtml,
+  registerInDirectory,
+  showToast,
+  applyTimeBasedGreeting
+} from "./shared/firebase.js";
+import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 import {
-  getFirestore,
   doc,
   setDoc,
+  getDoc,
   onSnapshot
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
-
-const firebaseConfig = {
-  apiKey: "AIzaSyCzs8NliIcPQ76GxzBwDQR26vuMFG07IGU",
-  authDomain: "scheduler-609b0.firebaseapp.com",
-  projectId: "scheduler-609b0",
-  storageBucket: "scheduler-609b0.firebasestorage.app",
-  messagingSenderId: "151764758872",
-  appId: "1:151764758872:web:4382212aaa6e870395b52d",
-  measurementId: "G-MX8DN7YLB2"
-};
-
-const app = initializeApp(firebaseConfig);
-
-try {
-  getAnalytics(app);
-} catch (error) {
-  console.warn("Analytics bypassed for local environment.", error);
-}
-
-const auth = getAuth(app);
-const db = getFirestore(app);
+import {
+  friendDocId,
+  initFriendsDropdown,
+  teardownFriendsDropdown
+} from "./shared/notifications.js";
+// shared/tax.js is loaded lazily below (loadTaxModule), NOT as a static
+// import here. A static import that fails (missing file, bad path, etc.)
+// kills this entire module — including the Firebase auth listener that
+// logs you in automatically — which is exactly what was happening: the
+// tax estimator's own import was taking the whole page down with it.
+// Loading it on demand means a tax.js problem only breaks the tax card,
+// never login or anything else on the page.
 
 const STORAGE_KEY = "benjamin-schedule-tracker-data";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+const urlParams = new URLSearchParams(location.search);
+const friendUid = urlParams.get("friend");
+const friendMode = !!friendUid;
 
 let currentUser = null;
 let unsubscribeSchedule = null;
@@ -462,47 +440,18 @@ let currentView = "single";
 let isSignUpMode = false;
 let storageWorking = true;
 
+let friendWeekOffset = 0;
+let friendWeeksData = {};
+let friendUsername = "";
+
+let editingShiftId = null;
+let scannedDraftShifts = [];
+
 let data = {
   weeks: {},
-  jobRates: {}
+  jobRates: {},
+  taxSettings: {}
 };
-
-function usernameToEmail(username) {
-  return `${username.toLowerCase().trim().replace(/[^a-z0-9_.-]/g, "")}@scheduler.app`;
-}
-
-function emailToUsername(email) {
-  return email ? email.split("@")[0] : "";
-}
-
-// Registers this user in the shared directory on login, so admins can
-// find and grant/hide anyone — not just people who've saved a shift.
-async function registerInDirectory(user) {
-  try {
-    await setDoc(doc(db, "directory", user.uid), {
-      username: emailToUsername(user.email),
-      updatedAt: Date.now()
-    }, { merge: true });
-  } catch (e) {
-    console.error("Could not register in directory:", e);
-  }
-}
-
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function showToast(message) {
-  const toast = document.getElementById("toast");
-  toast.textContent = message;
-  toast.classList.add("show");
-  setTimeout(() => toast.classList.remove("show"), 1800);
-}
 
 function setSyncStatus(message, type = "") {
   const status = document.getElementById("syncStatus");
@@ -534,7 +483,8 @@ function loadLocalData() {
       const parsed = JSON.parse(raw);
       data = {
         weeks: parsed.weeks || {},
-        jobRates: parsed.jobRates || {}
+        jobRates: parsed.jobRates || {},
+        taxSettings: parsed.taxSettings || {}
       };
     }
   } catch (error) {
@@ -608,6 +558,127 @@ function formatTime(time) {
   return `${hour12}:${String(minute).padStart(2, "0")} ${period}`;
 }
 
+async function loadPublishState() {
+  if (!currentUser) return;
+
+  try {
+    const snap = await getDoc(doc(db, "users", currentUser.uid));
+    document.getElementById("publishToggle").checked = snap.exists() && snap.data().published === true;
+  } catch (error) {
+    console.error("Could not load publish state:", error);
+  }
+}
+
+async function setSchedulePublished(isPublished) {
+  if (!currentUser) return;
+
+  try {
+    await setDoc(doc(db, "users", currentUser.uid), { published: isPublished }, { merge: true });
+    showToast(isPublished ? "Schedule published to friends ✓" : "Schedule unpublished ✓");
+  } catch (error) {
+    console.error("Could not update publish state:", error);
+    showToast("Could not save — check Firestore rules");
+    document.getElementById("publishToggle").checked = !isPublished;
+  }
+}
+
+function showFriendUnavailable(message) {
+  document.getElementById("friendUnavailableMsg").textContent = message;
+  document.getElementById("friendUnavailableCard").style.display = "block";
+  document.getElementById("friendScheduleContent").style.display = "none";
+}
+
+async function loadFriendSchedule() {
+  if (!currentUser || !friendUid) return;
+
+  document.getElementById("friendUnavailableCard").style.display = "none";
+  document.getElementById("friendScheduleContent").style.display = "none";
+
+  if (friendUid === currentUser.uid) {
+    showFriendUnavailable("That's your own schedule — view it from the Schedule page directly.");
+    return;
+  }
+
+  try {
+    const requestId = friendDocId(currentUser.uid, friendUid);
+    const reqSnap = await getDoc(doc(db, "friendRequests", requestId));
+
+    if (!reqSnap.exists() || reqSnap.data().status !== "accepted") {
+      showFriendUnavailable("You're not friends with this user.");
+      return;
+    }
+
+    const scheduleSnap = await getDoc(doc(db, "users", friendUid));
+
+    if (!scheduleSnap.exists() || scheduleSnap.data().published !== true) {
+      showFriendUnavailable("This friend hasn't published their schedule.");
+      return;
+    }
+
+    const cloud = scheduleSnap.data();
+    friendWeeksData = cloud.weeks || {};
+    friendUsername = cloud.username || "This friend";
+
+    document.getElementById("friendViewLabel").textContent = `Viewing ${friendUsername}'s schedule`;
+    document.getElementById("friendScheduleContent").style.display = "block";
+    renderFriendWeek();
+  } catch (error) {
+    console.error("Could not load friend schedule:", error);
+    showFriendUnavailable("Could not load this schedule. Check Firestore rules.");
+  }
+}
+
+function changeFriendWeek(delta) {
+  friendWeekOffset += delta;
+  renderFriendWeek();
+}
+
+function renderFriendWeek() {
+  document.getElementById("friendWeekLabel").textContent = formatWeekLabel(friendWeekOffset);
+
+  const key = weekKey(friendWeekOffset);
+  const shifts = [...(friendWeeksData[key] || [])].sort((a, b) =>
+    DAYS.indexOf(a.day) - DAYS.indexOf(b.day) || a.start.localeCompare(b.start)
+  );
+
+  const totalHours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
+  const jobs = new Set(shifts.map(shift => shift.job).filter(Boolean));
+
+  document.getElementById("friendSummary").innerHTML = `
+    <div class="stat"><div class="stat-value">${totalHours.toFixed(1)}</div><div class="stat-label">Total Hours</div></div>
+    <div class="stat"><div class="stat-value">${shifts.length}</div><div class="stat-label">Shifts</div></div>
+    <div class="stat"><div class="stat-value">${jobs.size}</div><div class="stat-label">Jobs</div></div>
+    <div class="stat"><div class="stat-value">🔒</div><div class="stat-label">Pay (private)</div></div>
+  `;
+
+  const list = document.getElementById("friendShiftList");
+
+  if (!shifts.length) {
+    list.innerHTML = `<div class="empty-state">No shifts logged for this week.</div>`;
+    return;
+  }
+
+  list.innerHTML = DAYS.map(day => {
+    const dayShifts = shifts.filter(shift => shift.day === day);
+    if (!dayShifts.length) return "";
+
+    return `
+      <div class="day-group">
+        <div class="day-header">${day}</div>
+        ${dayShifts.map(shift => `
+          <div class="shift">
+            <div class="shift-info">
+              <span class="shift-job">${escapeHtml(shift.job)}</span><br>
+              ${formatTime(shift.start)} – ${formatTime(shift.end)}
+              <span class="shift-hours">${(Number(shift.hours) || 0).toFixed(1)}h</span>
+            </div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }).join("");
+}
+
 async function saveCloudData() {
   if (!currentUser) {
     setSyncStatus("Saved on this device. Sign in to sync your schedule.");
@@ -620,6 +691,7 @@ async function saveCloudData() {
     await setDoc(doc(db, "users", currentUser.uid), {
       weeks: data.weeks || {},
       jobRates: data.jobRates || {},
+      taxSettings: data.taxSettings || {},
       username: emailToUsername(currentUser.email),
       updatedAt: Date.now()
     });
@@ -646,7 +718,8 @@ function startScheduleListener() {
 
         data = {
           weeks: cloud.weeks || {},
-          jobRates: cloud.jobRates || {}
+          jobRates: cloud.jobRates || {},
+          taxSettings: cloud.taxSettings || {}
         };
 
         saveLocalData();
@@ -664,6 +737,34 @@ function startScheduleListener() {
       setSyncStatus("Firebase cannot load schedule. Check Firestore rules.", "error");
     }
   );
+}
+
+function startEditShift(id) {
+  const key = weekKey(currentWeekOffset);
+  const shift = (data.weeks[key] || []).find(s => Number(s.id) === Number(id));
+  if (!shift) return;
+
+  editingShiftId = shift.id;
+
+  document.getElementById("day").value = shift.day;
+  document.getElementById("job").value = shift.job;
+  document.getElementById("start").value = shift.start;
+  document.getElementById("end").value = shift.end;
+  document.getElementById("rate").value = shift.rate || "";
+
+  document.getElementById("addShiftBtn").textContent = "Update Shift";
+  document.getElementById("cancelEditBtn").style.display = "block";
+
+  document.getElementById("day").scrollIntoView({ behavior: "smooth", block: "center" });
+}
+
+function cancelEditShift() {
+  editingShiftId = null;
+
+  document.getElementById("job").value = "";
+  document.getElementById("rate").value = "";
+  document.getElementById("addShiftBtn").textContent = "+ Add Shift";
+  document.getElementById("cancelEditBtn").style.display = "none";
 }
 
 async function addShift() {
@@ -687,19 +788,33 @@ async function addShift() {
 
   const rate = enteredRate ?? data.jobRates[job] ?? null;
   const key = weekKey(currentWeekOffset);
+  const wasEditing = editingShiftId != null;
 
   if (!data.weeks[key]) data.weeks[key] = [];
   if (rate) data.jobRates[job] = rate;
 
-  data.weeks[key].push({
-    id: Date.now(),
-    day,
-    job,
-    start,
-    end,
-    hours: hoursBetween(start, end),
-    rate
-  });
+  if (wasEditing) {
+    const list = data.weeks[key];
+    const idx = list.findIndex(s => Number(s.id) === Number(editingShiftId));
+
+    if (idx !== -1) {
+      list[idx] = { ...list[idx], day, job, start, end, hours: hoursBetween(start, end), rate };
+    }
+
+    editingShiftId = null;
+    document.getElementById("addShiftBtn").textContent = "+ Add Shift";
+    document.getElementById("cancelEditBtn").style.display = "none";
+  } else {
+    data.weeks[key].push({
+      id: Date.now(),
+      day,
+      job,
+      start,
+      end,
+      hours: hoursBetween(start, end),
+      rate
+    });
+  }
 
   saveLocalData();
   render();
@@ -708,7 +823,9 @@ async function addShift() {
   document.getElementById("rate").value = "";
 
   const saved = await saveCloudData();
-  showToast(saved ? "Shift added and saved ✓" : "Shift added locally, cloud save failed");
+  showToast(saved
+    ? (wasEditing ? "Shift updated ✓" : "Shift added and saved ✓")
+    : (wasEditing ? "Updated locally, cloud save failed" : "Shift added locally, cloud save failed"));
 }
 
 async function deleteShift(id) {
@@ -720,11 +837,679 @@ async function deleteShift(id) {
 
   if (!data.weeks[key].length) delete data.weeks[key];
 
+  if (editingShiftId === id) cancelEditShift();
+
   saveLocalData();
   render();
 
   const saved = await saveCloudData();
   showToast(saved ? "Shift deleted and cloud updated ✓" : "Deleted locally, cloud update failed");
+}
+
+// ---------------------------------------------------------------------
+// Screenshot import: OCR the image client-side (Tesseract.js, loaded on
+// demand so pages that never use this feature don't pay for it), then run
+// a heuristic parser over the recognized text looking for "day name" +
+// "time range" patterns. Nothing gets added to the schedule until the
+// user reviews/edits the draft rows and confirms.
+//
+// Two source formats are supported:
+//  1. Plain text schedules ("Monday 9:00am - 5:00pm") — parseScheduleText,
+//     line-based.
+//  2. Grid/table schedules from scheduling apps (Krowd, HotSchedules,
+//     etc.) with a day-abbreviation header row and a start time + separate
+//     duration per column, no "-" range — parseScheduleGrid, which uses
+//     each word's on-image position (not just reading order) to figure out
+//     which day column it belongs to, since OCR on a table reads roughly
+//     row-by-row (all day labels, then all times, then all durations) and
+//     line-based day-then-time matching doesn't work on that ordering.
+// parseScheduleGrid runs first since it degrades safely (returns nothing)
+// on non-grid images; parseScheduleText is the fallback either way.
+// ---------------------------------------------------------------------
+
+// App-schedule screenshots are usually small with tight, low-contrast text
+// in each grid cell — confirmed by direct testing that Tesseract reads
+// those cells as pure gibberish at native size, but cleanly once upscaled
+// and contrast-stretched. Returns a canvas (Tesseract.js accepts one
+// directly) rather than mutating the original file.
+function preprocessImageForOcr(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.max(1, Math.min(4, 1400 / img.naturalWidth));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.naturalWidth * scale);
+      canvas.height = Math.round(img.naturalHeight * scale);
+
+      const ctx = canvas.getContext("2d");
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const px = imgData.data;
+      let min = 255, max = 0;
+      for (let i = 0; i < px.length; i += 4) {
+        const gray = 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+        px[i] = px[i + 1] = px[i + 2] = gray;
+        if (gray < min) min = gray;
+        if (gray > max) max = gray;
+      }
+      const range = Math.max(1, max - min);
+      for (let i = 0; i < px.length; i += 4) {
+        const stretched = ((px[i] - min) / range) * 255;
+        px[i] = px[i + 1] = px[i + 2] = stretched;
+      }
+      ctx.putImageData(imgData, 0, 0);
+
+      URL.revokeObjectURL(img.src);
+      resolve(canvas);
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function scanScheduleImage() {
+  const fileInput = document.getElementById("scheduleImageInput");
+  const file = fileInput.files && fileInput.files[0];
+  const statusEl = document.getElementById("scanStatus");
+
+  if (!file) {
+    showToast("Choose an image first");
+    return;
+  }
+
+  statusEl.className = "sync-status";
+  statusEl.textContent = "Loading text recognition… (first scan can take a few seconds)";
+
+  try {
+    // Tesseract.js's ESM build only exports a default export (an object
+    // with createWorker etc. as properties) — not a named `createWorker`
+    // export — confirmed by inspecting the actual published package.
+    // Destructuring `{ createWorker }` from the import leaves it
+    // `undefined`, which is why every scan has failed with the same
+    // "createWorker is not a function" error regardless of the image.
+    const { default: Tesseract } = await import("https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.esm.min.js");
+    const worker = await Tesseract.createWorker("eng");
+    // Tesseract's default page-segmentation mode does full-page layout
+    // analysis (built for scanned documents) and, on app screenshots,
+    // reliably misclassifies bordered/circled UI elements (date circles,
+    // time boxes) as non-text graphics — dropping them from the output
+    // entirely with no garbling or error to signal it happened. "Single
+    // uniform block of text" mode skips that layout analysis and reads
+    // them correctly. Confirmed directly: identical test image went from
+    // reading only the day-label row to reading every time box cleanly
+    // after this one setting change.
+    await worker.setParameters({ tessedit_pageseg_mode: "6" });
+
+    statusEl.textContent = "Reading the image…";
+    const processedImage = await preprocessImageForOcr(file).catch(() => file);
+    const { data } = await worker.recognize(processedImage);
+    await worker.terminate();
+
+    statusEl.textContent = "Looking for shifts…";
+    const words = data.words || [];
+    let drafts = parseScheduleGrid(words);
+    if (!drafts.length) drafts = parseScheduleText(data.text || "");
+
+    if (!drafts.length) {
+      // Surfaces what OCR actually read (not just "it failed") so a
+      // screenshot of this tells us whether the text came out garbled
+      // (image-quality problem) or came out clean but didn't match either
+      // parser's patterns (a parsing-logic problem) — those need very
+      // different fixes and looked identical before this.
+      console.error("Schedule scan found no shifts. Raw OCR text:", data.text);
+      console.error("Word count:", words.length, "| words:", words.map(w => w.text));
+      statusEl.className = "sync-status error";
+      const preview = (data.text || "").replace(/\s+/g, " ").trim().slice(0, 200);
+      statusEl.innerHTML = `Couldn't find any recognizable shifts in that image. Try a clearer, more cropped screenshot, or add shifts manually above.<br><br><span style="opacity:0.7; font-size:11px;">What was read (${words.length} words): "${escapeHtml(preview) || "(nothing readable)"}"</span>`;
+      document.getElementById("scanResults").style.display = "none";
+      return;
+    }
+
+    scannedDraftShifts = drafts;
+    statusEl.className = "sync-status success";
+
+    const missing = drafts.filter(d => d.durationGuessed && d.end === d.start).length;
+    const guessed = drafts.filter(d => d.durationGuessed && d.end !== d.start).length;
+    let msg = `Found ${drafts.length} possible shift${drafts.length === 1 ? "" : "s"} — review and edit before adding.`;
+    if (guessed) msg += ` ${guessed} end time${guessed === 1 ? "" : "s"} guessed from your past shifts at that start time (marked below) — double-check ${guessed === 1 ? "it" : "them"}.`;
+    if (missing) msg += ` ${missing} shift${missing === 1 ? "" : "s"} had no end time anywhere in the image and no history to guess from — fill ${missing === 1 ? "it" : "them"} in (highlighted below).`;
+    statusEl.textContent = msg;
+    renderScanResults();
+  } catch (error) {
+    console.error("Schedule scan failed:", error);
+    statusEl.className = "sync-status error";
+    // Includes the real error text (not just a generic message) so a
+    // screenshot of this actually tells us what broke — CDN blocked,
+    // worker creation failed, image format rejected, etc. — instead of
+    // every distinct failure looking identical from the outside.
+    const detail = (error && (error.message || String(error))) || "unknown error";
+    statusEl.textContent = `Couldn't read that image (${detail}). Try again, or add shifts manually above.`;
+  }
+}
+
+const SCHEDULE_DAY_PATTERNS = [
+  ["Monday", /^mon(day)?\.?$/i],
+  ["Tuesday", /^tues?(day)?\.?$/i],
+  ["Wednesday", /^wed(nesday)?\.?$/i],
+  ["Thursday", /^thu(r|rs|rsday)?\.?$/i],
+  ["Friday", /^fri(day)?\.?$/i],
+  ["Saturday", /^sat(urday)?\.?$/i],
+  ["Sunday", /^sun(day)?\.?$/i]
+];
+
+// e.g. "4:30 PM" — a single time, not a range. Used for grid schedules
+// that show a start time plus a separate duration instead of "X - Y".
+const SINGLE_TIME_RE = /(\d{1,2})(?::(\d{2}))?\s*([ap])\.?m?\.?/i;
+// e.g. "4h 48m", "6h12m", "4 h 8 m"
+const DURATION_RE = /(\d{1,2})\s*h\s*(\d{1,2})?\s*m?/i;
+
+function singleTimeTo24Hour(hStr, mStr, mer) {
+  let h = parseInt(hStr, 10);
+  const m = mStr ? parseInt(mStr, 10) : 0;
+  if (mer.toLowerCase() === "p" && h < 12) h += 12;
+  if (mer.toLowerCase() === "a" && h === 12) h = 0;
+  return { h, m, label: `${String(h % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}` };
+}
+
+// Some scheduling-app screenshots (e.g. a simple "next shift" view) only
+// ever show a clock-in time, never an end time or duration — there's
+// nothing in the image to parse a duration out of, no matter how good the
+// OCR is. Rather than silently collapsing those to a useless 0-length
+// shift, look across every week already logged for another shift that
+// started at this same time and reuse whatever end time showed up most
+// often — this is genuinely a guess, not something read off the image, so
+// callers must still flag it for the user to confirm.
+function guessEndTimeForStart(startTime) {
+  const counts = {};
+  for (const key in data.weeks) {
+    for (const shift of (data.weeks[key] || [])) {
+      if (shift.start === startTime && shift.end && shift.end !== startTime) {
+        counts[shift.end] = (counts[shift.end] || 0) + 1;
+      }
+    }
+  }
+  let best = null, bestCount = 0;
+  for (const end in counts) {
+    if (counts[end] > bestCount) { bestCount = counts[end]; best = end; }
+  }
+  return best;
+}
+
+// Reconstructs a day-column grid (Krowd, HotSchedules, and similar
+// scheduling-app screenshots) from Tesseract's word-level bounding boxes.
+// OCR on a table like this reads roughly row-by-row — every day label,
+// then every date, then every time, then every duration — so matching
+// "the next time after a day label" (as parseScheduleText does) pairs
+// every shift with the wrong day. Instead, each day header's x-position
+// defines a column, and every other word gets bucketed into whichever
+// day-column it's horizontally closest to, then read top-to-bottom within
+// that bucket. A day with no shift naturally produces no time match and
+// is skipped, rather than shifting every later day over by one.
+function parseScheduleGrid(words) {
+  if (!words || words.length < 4) return [];
+
+  const dayWords = words.filter(w => SCHEDULE_DAY_PATTERNS.some(([, re]) => re.test((w.text || "").trim())));
+  // Need at least 2 day-column headers to treat this as a grid at all —
+  // otherwise this isn't that kind of screenshot, and parseScheduleText's
+  // line-based approach is the right tool instead.
+  if (dayWords.length < 2) return [];
+
+  const columns = dayWords.map(w => ({
+    day: SCHEDULE_DAY_PATTERNS.find(([, re]) => re.test(w.text.trim()))[0],
+    x: (w.bbox.x0 + w.bbox.x1) / 2,
+    words: [w]
+  })).sort((a, b) => a.x - b.x);
+
+  const gaps = [];
+  for (let i = 1; i < columns.length; i++) gaps.push(columns[i].x - columns[i - 1].x);
+  const avgGap = gaps.length ? gaps.reduce((a, b) => a + b, 0) / gaps.length : Infinity;
+  const maxDist = avgGap * 0.7;
+
+  const dayWordSet = new Set(dayWords);
+  for (const w of words) {
+    if (dayWordSet.has(w)) continue;
+    const cx = (w.bbox.x0 + w.bbox.x1) / 2;
+    let nearest = null, nearestDist = Infinity;
+    for (const col of columns) {
+      const dist = Math.abs(cx - col.x);
+      if (dist < nearestDist) { nearestDist = dist; nearest = col; }
+    }
+    if (nearest && nearestDist <= maxDist) nearest.words.push(w);
+  }
+
+  const drafts = [];
+  for (const col of columns) {
+    col.words.sort((a, b) => a.bbox.y0 - b.bbox.y0);
+    const colText = col.words.map(w => w.text).join(" ");
+
+    const timeMatch = colText.match(SINGLE_TIME_RE);
+    if (!timeMatch) continue; // no time found in this column — likely a day off
+
+    const [, hStr, mStr, mer] = timeMatch;
+    const { h, m, label: start } = singleTimeTo24Hour(hStr, mStr, mer);
+
+    const durMatch = colText.match(DURATION_RE);
+    let end = start;
+    let durationGuessed = false;
+    if (durMatch) {
+      // Duration text was actually read off the image — trustworthy.
+      const durH = parseInt(durMatch[1], 10) || 0;
+      const durM = durMatch[2] ? parseInt(durMatch[2], 10) : 0;
+      const totalMin = (h * 60 + m + durH * 60 + durM) % (24 * 60);
+      end = `${String(Math.floor(totalMin / 60)).padStart(2, "0")}:${String(totalMin % 60).padStart(2, "0")}`;
+    } else {
+      // No duration anywhere in this column — try reusing the end time
+      // from a past shift with the same start time; otherwise leave a
+      // 0-length shift as a visible flag to fix in review. Either way
+      // this needs the user's eyes before it's added.
+      const guess = guessEndTimeForStart(start);
+      if (guess) end = guess;
+      durationGuessed = true;
+    }
+
+    drafts.push({ day: col.day, job: "", start, end, hours: hoursBetween(start, end), rate: null, durationGuessed });
+  }
+
+  return drafts;
+}
+
+function parseScheduleText(rawText) {
+  const DAY_PATTERNS = [
+    ["Monday", /\bmon(day)?\b/i],
+    ["Tuesday", /\btues?(day)?\b/i],
+    ["Wednesday", /\bwed(nesday)?\b/i],
+    ["Thursday", /\bthu(r|rs|rsday)?\b/i],
+    ["Friday", /\bfri(day)?\b/i],
+    ["Saturday", /\bsat(urday)?\b/i],
+    ["Sunday", /\bsun(day)?\b/i]
+  ];
+
+  // e.g. "9:00am - 5:00pm", "9 - 5pm", "9:00 – 17:00"
+  const TIME_RANGE_RE = /(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?\s*[-–—]\s*(\d{1,2})(?::(\d{2}))?\s*([ap])?\.?m?\.?/i;
+
+  function to24Hour(hour, minute, meridiem, fallbackMeridiem) {
+    let h = parseInt(hour, 10);
+    const m = minute ? parseInt(minute, 10) : 0;
+    const mer = (meridiem || fallbackMeridiem || "").toLowerCase();
+
+    if (mer === "p" && h < 12) h += 12;
+    if (mer === "a" && h === 12) h = 0;
+    // No AM/PM anywhere on the line and hour looks like a 24h value already — leave as-is.
+    // Otherwise, bare small numbers with no meridiem default to PM (shift schedules
+    // are overwhelmingly afternoon/evening, and this only affects the draft the
+    // user reviews before confirming).
+    if (!mer && h > 0 && h < 8) h += 12;
+
+    return `${String(h % 24).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+  }
+
+  const lines = rawText.split("\n").map(line => line.trim()).filter(Boolean);
+  const drafts = [];
+  let currentDay = null;
+
+  for (const line of lines) {
+    const dayMatch = DAY_PATTERNS.find(([, re]) => re.test(line));
+    if (dayMatch) currentDay = dayMatch[0];
+
+    if (dayMatch && /\boff\b/i.test(line)) continue;
+    if (!currentDay) continue;
+
+    const timeMatch = line.match(TIME_RANGE_RE);
+    if (!timeMatch) continue;
+
+    const [full, sh, sm, sMer, eh, em, eMer] = timeMatch;
+    const start = to24Hour(sh, sm, sMer, eMer);
+    const end = to24Hour(eh, em, eMer, sMer);
+
+    let job = line.replace(full, "");
+    const dayLabel = dayMatch ? dayMatch[0] : "";
+    job = job.replace(new RegExp(dayLabel, "i"), "");
+    job = job.replace(/[^a-zA-Z0-9&' ]/g, " ").replace(/\s+/g, " ").trim();
+
+    drafts.push({
+      day: currentDay,
+      job: job.length > 1 && job.length < 40 ? job : "",
+      start,
+      end,
+      hours: hoursBetween(start, end),
+      rate: null
+    });
+  }
+
+  return drafts;
+}
+
+function renderScanResults() {
+  const container = document.getElementById("scanResults");
+
+  if (!scannedDraftShifts.length) {
+    container.style.display = "none";
+    return;
+  }
+
+  container.style.display = "block";
+  container.innerHTML = `
+    ${scannedDraftShifts.map((s, i) => {
+      const missingEnd = s.durationGuessed && s.end === s.start;
+      const guessedEnd = s.durationGuessed && s.end !== s.start;
+      const endStyle = missingEnd ? "border-color:var(--danger);" : guessedEnd ? "border-color:var(--accent);" : "";
+      return `
+      <div class="shift" style="flex-wrap:wrap; align-items:flex-start;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; flex:1; min-width:220px;">
+          <select onchange="updateDraftShift(${i}, 'day', this.value)">
+            ${DAYS.map(d => `<option ${d === s.day ? "selected" : ""}>${d}</option>`).join("")}
+          </select>
+          <input type="text" value="${escapeHtml(s.job)}" placeholder="Job" oninput="updateDraftShift(${i}, 'job', this.value)">
+          <input type="time" value="${s.start}" onchange="updateDraftShift(${i}, 'start', this.value)">
+          <input type="time" value="${s.end}" onchange="updateDraftShift(${i}, 'end', this.value)" style="${endStyle}">
+          ${missingEnd ? `<div style="grid-column:1/-1; font-size:11px; color:#ff8a8f;">⚠️ No end time found in the image — set one</div>` : ""}
+          ${guessedEnd ? `<div style="grid-column:1/-1; font-size:11px; color:var(--accent);">Guessed from a past shift starting at this time — double-check</div>` : ""}
+        </div>
+        <button class="del-btn" onclick="removeDraftShift(${i})" title="Remove this row">✕</button>
+      </div>
+    `;
+    }).join("")}
+    <button style="margin-top:10px;" onclick="confirmDraftShifts()">
+      ✓ Add ${scannedDraftShifts.length} Shift${scannedDraftShifts.length === 1 ? "" : "s"} to ${formatWeekLabel(currentWeekOffset)}
+    </button>
+  `;
+}
+
+function updateDraftShift(index, field, value) {
+  const shift = scannedDraftShifts[index];
+  if (!shift) return;
+
+  shift[field] = value;
+  if (field === "start" || field === "end") shift.hours = hoursBetween(shift.start, shift.end);
+
+  // Once the user has actually set/confirmed an end time themselves, the
+  // guessed/missing warning no longer applies — re-render so it clears.
+  if (field === "end") {
+    shift.durationGuessed = false;
+    renderScanResults();
+  }
+}
+
+function removeDraftShift(index) {
+  scannedDraftShifts.splice(index, 1);
+
+  if (!scannedDraftShifts.length) {
+    document.getElementById("scanResults").style.display = "none";
+    document.getElementById("scanStatus").textContent = "";
+    return;
+  }
+
+  renderScanResults();
+}
+
+async function confirmDraftShifts() {
+  const key = weekKey(currentWeekOffset);
+  if (!data.weeks[key]) data.weeks[key] = [];
+
+  scannedDraftShifts.forEach(draft => {
+    const job = draft.job || "Imported shift";
+    const rate = draft.rate ?? data.jobRates[job] ?? null;
+
+    data.weeks[key].push({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      day: draft.day,
+      job,
+      start: draft.start,
+      end: draft.end,
+      hours: hoursBetween(draft.start, draft.end),
+      rate
+    });
+  });
+
+  const count = scannedDraftShifts.length;
+  scannedDraftShifts = [];
+
+  document.getElementById("scanResults").style.display = "none";
+  document.getElementById("scanStatus").textContent = "";
+  document.getElementById("scheduleImageInput").value = "";
+
+  saveLocalData();
+  render();
+
+  const saved = await saveCloudData();
+  showToast(saved ? `${count} shift(s) added ✓` : `${count} shift(s) added locally, cloud save failed`);
+}
+
+// ---------------------------------------------------------------------
+// Paycheck / tax estimate card.
+// ---------------------------------------------------------------------
+
+let taxModule = null;
+let taxModuleFailed = false;
+
+// Loads shared/tax.js on first actual use instead of at page load, so a
+// broken/missing tax.js can never block auth or the rest of the page from
+// working (see the comment up by the other imports). Cached after the
+// first successful load; if it fails, we remember that and stop retrying
+// every keystroke — the tax card just shows a clear message instead.
+async function loadTaxModule() {
+  if (taxModule) return taxModule;
+  if (taxModuleFailed) return null;
+
+  try {
+    taxModule = await import("./shared/tax.js");
+    return taxModule;
+  } catch (error) {
+    console.error("Could not load shared/tax.js — tax estimate unavailable:", error);
+    taxModuleFailed = true;
+    return null;
+  }
+}
+
+async function populateTaxStateOptions() {
+  const select = document.getElementById("taxState");
+  const mod = await loadTaxModule();
+
+  if (!mod) {
+    select.innerHTML = `<option value="">Unavailable</option>`;
+    return;
+  }
+
+  select.innerHTML = mod.US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
+}
+
+// One line under the state/filing-status row telling the user, in plain
+// language, how their chosen state actually treats paycheck withholding —
+// since "no state income tax" states (NV, TX, FL, WA, ...) should visibly
+// zero out that line rather than just showing "$0" with no explanation.
+async function updateTaxStateNote() {
+  const noteEl = document.getElementById("taxStateNote");
+  const code = document.getElementById("taxState").value;
+  const mod = await loadTaxModule();
+
+  if (!mod) {
+    noteEl.textContent = "Tax estimate is unavailable right now.";
+    return;
+  }
+
+  if (!code) {
+    noteEl.textContent = "Pick a state to see how it affects your paycheck.";
+    return;
+  }
+
+  const [, stateName] = mod.US_STATES.find(([c]) => c === code) || [code, code];
+  const info = mod.STATE_TAX[code];
+
+  if (!info || info.type === "none") {
+    noteEl.textContent = `${stateName} has no state income tax — only federal tax and FICA come out of your paycheck.`;
+  } else if (info.type === "flat") {
+    noteEl.textContent = `${stateName} withholds state income tax at a flat ${(info.rate * 100).toFixed(2)}% above the standard deduction.`;
+  } else {
+    noteEl.textContent = `${stateName} withholds state income tax on a bracket schedule — the rate rises with how much you earn.`;
+  }
+}
+
+async function loadTaxSettingsIntoForm() {
+  const settings = data.taxSettings || {};
+  // Auto mode is the default for anyone who hasn't touched this before —
+  // only an explicit `false` (a prior manual entry) turns it off.
+  const autoAnnual = settings.autoAnnual !== false;
+
+  document.getElementById("taxState").value = settings.state || "";
+  document.getElementById("taxFilingStatus").value = settings.filingStatus || "single";
+  document.getElementById("taxPeriods").value = String(settings.periods || 26);
+  document.getElementById("taxAutoAnnual").checked = autoAnnual;
+
+  const annualInput = document.getElementById("taxAnnualIncome");
+  annualInput.disabled = autoAnnual;
+
+  if (autoAnnual) {
+    const { totalPay } = getWeekTotals(currentWeekOffset);
+    annualInput.value = totalPay > 0 ? Math.round(totalPay * 52) : "";
+  } else if (settings.annualIncome != null) {
+    annualInput.value = settings.annualIncome;
+  } else {
+    annualInput.value = "";
+  }
+
+  await updateTaxStateNote();
+  await recalcTaxSummary();
+}
+
+function onTaxSettingsChange() {
+  const autoAnnual = document.getElementById("taxAutoAnnual").checked;
+  data.taxSettings = {
+    state: document.getElementById("taxState").value,
+    filingStatus: document.getElementById("taxFilingStatus").value,
+    periods: Number(document.getElementById("taxPeriods").value) || 26,
+    autoAnnual,
+    // Only persist a manual override when auto mode is off — otherwise
+    // a stale manual figure would silently take over the next time auto
+    // mode gets toggled back on.
+    annualIncome: autoAnnual ? null : (Number(document.getElementById("taxAnnualIncome").value) || null)
+  };
+
+  updateTaxStateNote();
+  recalcTaxSummary();
+  saveLocalData();
+  saveCloudData();
+}
+
+// Flips auto mode on/off. Turning it on immediately overwrites whatever
+// was typed in the field with this week's scheduled pay × 52; turning it
+// off just unlocks the field so a manual figure can be typed in.
+function onTaxAutoToggle() {
+  const autoAnnual = document.getElementById("taxAutoAnnual").checked;
+  const annualInput = document.getElementById("taxAnnualIncome");
+  annualInput.disabled = autoAnnual;
+
+  if (autoAnnual) {
+    const { totalPay } = getWeekTotals(currentWeekOffset);
+    annualInput.value = totalPay > 0 ? Math.round(totalPay * 52) : "";
+  }
+
+  onTaxSettingsChange();
+}
+
+async function recalcTaxSummary() {
+  const summaryEl = document.getElementById("taxSummary");
+  const breakdownEl = document.getElementById("taxDeductionBreakdown");
+  const breakdownLabel = document.getElementById("taxBreakdownLabel");
+  const weeklyEl = document.getElementById("weeklyTaxSummary");
+  const annualIncome = Number(document.getElementById("taxAnnualIncome").value) || 0;
+
+  const mod = await loadTaxModule();
+  if (!mod) {
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Tax estimate is unavailable right now — everything else on this page still works fine.</div>`;
+    breakdownEl.innerHTML = "";
+    breakdownLabel.style.display = "none";
+    weeklyEl.innerHTML = "";
+    return;
+  }
+
+  if (!annualIncome) {
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see your paycheck deductions.</div>`;
+    breakdownEl.innerHTML = "";
+    breakdownLabel.style.display = "none";
+    weeklyEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Log shifts with a pay rate this week — and either turn on auto-calculate or enter an estimated annual pay — to see your take-home for the week.</div>`;
+    return;
+  }
+
+  const stateCode = document.getElementById("taxState").value;
+  const [, stateName] = mod.US_STATES.find(([c]) => c === stateCode) || [stateCode, "your state"];
+
+  const result = mod.estimatePaycheck({
+    annualGross: annualIncome,
+    filingStatus: document.getElementById("taxFilingStatus").value,
+    stateCode,
+    periodsPerYear: Number(document.getElementById("taxPeriods").value) || 26
+  });
+
+  const totalDeducted = result.perPeriod.gross - result.perPeriod.net;
+  const deductedPct = result.perPeriod.gross ? (totalDeducted / result.perPeriod.gross) * 100 : 0;
+
+  // result.totalTax is already the full YEAR's deduction regardless of
+  // which pay frequency is selected above (periodsPerYear only changes
+  // how it's sliced into perPeriod figures) — so dividing it by the
+  // annual gross gives one effective rate that correctly reflects
+  // progressive brackets at this income level. Applying that rate to
+  // this week's actual scheduled gross (which can vary week to week)
+  // is a much better estimate of this week's take-home than just
+  // dividing the annual figure evenly by 52.
+  const effectiveRate = result.annualGross > 0 ? result.totalTax / result.annualGross : 0;
+  const { totalHours: weekHours, totalPay: weekGross } = getWeekTotals(currentWeekOffset);
+
+  if (weekGross <= 0) {
+    weeklyEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Log shifts with a pay rate for ${formatWeekLabel(currentWeekOffset)} to see your take-home for the week.</div>`;
+  } else {
+    const weekTax = weekGross * effectiveRate;
+    const weekNet = weekGross - weekTax;
+    weeklyEl.innerHTML = `
+      <div class="stat"><div class="stat-value">${weekHours.toFixed(1)}</div><div class="stat-label">Scheduled Hours</div></div>
+      <div class="stat"><div class="stat-value">$${weekGross.toFixed(2)}</div><div class="stat-label">Gross This Week</div></div>
+      <div class="stat"><div class="stat-value">$${weekNet.toFixed(2)}</div><div class="stat-label">Take-Home This Week</div></div>
+      <div class="stat"><div class="stat-value">${(effectiveRate * 100).toFixed(1)}%</div><div class="stat-label">Effective Tax Rate</div></div>
+    `;
+  }
+
+  // Leads with "what comes out" and "what you keep" — the two numbers that
+  // actually answer "what will I be paid" — before the per-year totals.
+  summaryEl.innerHTML = `
+    <div class="stat"><div class="stat-value">$${totalDeducted.toFixed(2)}</div><div class="stat-label">Total Deducted / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.perPeriod.net.toFixed(2)}</div><div class="stat-label">Take-Home / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">$${result.perPeriod.gross.toFixed(2)}</div><div class="stat-label">Gross / Paycheck</div></div>
+    <div class="stat"><div class="stat-value">${deductedPct.toFixed(1)}%</div><div class="stat-label">% Deducted</div></div>
+    <div class="stat"><div class="stat-value">$${result.netAnnual.toFixed(0)}</div><div class="stat-label">Est. Net / Year</div></div>
+    <div class="stat"><div class="stat-value">$${result.totalTax.toFixed(0)}</div><div class="stat-label">Total Deducted / Year</div></div>
+  `;
+
+  // The per-source breakdown, called out separately so the state's own
+  // slice of the deduction (the part that changes if he ever works or
+  // moves to a different state) is easy to see on its own.
+  breakdownLabel.style.display = "block";
+  breakdownEl.innerHTML = `
+    <div class="insight-row">
+      <div class="insight-row-label">Federal income tax</div>
+      <div class="insight-row-value">$${result.perPeriod.federal.toFixed(2)} / paycheck · $${result.federal.toFixed(0)}/yr</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-row-label">${escapeHtml(stateName)} state tax</div>
+      <div class="insight-row-value">${result.state > 0 ? `$${result.perPeriod.state.toFixed(2)} / paycheck · $${result.state.toFixed(0)}/yr` : "$0 — no state income tax"}</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-row-label">FICA (Social Security + Medicare)</div>
+      <div class="insight-row-value">$${result.perPeriod.fica.toFixed(2)} / paycheck · $${result.fica.total.toFixed(0)}/yr</div>
+    </div>
+  `;
+}
+
+// Shared by the schedule summary card and the tax card so "this week's
+// hours/pay" can never drift between the two — both read from the same
+// place instead of recomputing the same reduce() independently.
+function getWeekTotals(offset) {
+  const key = weekKey(offset);
+  const shifts = data.weeks[key] || [];
+  const totalHours = shifts.reduce((sum, s) => sum + (Number(s.hours) || 0), 0);
+  const totalPay = shifts.reduce((sum, s) => sum + ((Number(s.hours) || 0) * (Number(s.rate) || 0)), 0);
+  return { shifts, totalHours, totalPay };
 }
 
 function changeWeek(delta) {
@@ -1044,8 +1829,7 @@ function renderSingleWeek() {
     .map(job => `<option value="${escapeHtml(job)}">`)
     .join("");
 
-  const totalHours = shifts.reduce((sum, shift) => sum + (Number(shift.hours) || 0), 0);
-  const totalPay = shifts.reduce((sum, shift) => sum + ((Number(shift.hours) || 0) * (Number(shift.rate) || 0)), 0);
+  const { totalHours, totalPay } = getWeekTotals(currentWeekOffset);
   const jobs = new Set(shifts.map(shift => shift.job).filter(Boolean));
 
   document.getElementById("summary").innerHTML = `
@@ -1079,12 +1863,17 @@ function renderSingleWeek() {
                 ${shift.rate ? ` · $${((Number(shift.hours) || 0) * Number(shift.rate)).toFixed(2)}` : ""}
               </span>
             </div>
-            <button class="del-btn" onclick="deleteShift(${Number(shift.id)})">✕</button>
+            <div style="display:flex; gap:4px; flex-shrink:0;">
+              <button class="del-btn" onclick="startEditShift(${Number(shift.id)})" title="Edit shift">✎</button>
+              <button class="del-btn" onclick="deleteShift(${Number(shift.id)})" title="Delete shift">✕</button>
+            </div>
           </div>
         `).join("")}
       </div>
     `;
   }).join("");
+
+  loadTaxSettingsIntoForm();
 }
 
 function render() {
@@ -1175,6 +1964,15 @@ function toggleAuthMode() {
     : "Don't have an account? Sign up";
 }
 
+if (friendMode) {
+  document.getElementById("authTitle").textContent = "Sign in to view this schedule";
+  document.getElementById("loggedInSubtext").textContent = "Viewing a friend's schedule — pay is never shared.";
+  document.getElementById("publishCard").style.display = "none";
+  document.getElementById("viewNavCard").style.display = "none";
+  document.getElementById("singleView").style.display = "none";
+  document.getElementById("friendView").style.display = "block";
+}
+
 onAuthStateChanged(auth, user => {
   currentUser = user;
 
@@ -1183,20 +1981,32 @@ onAuthStateChanged(auth, user => {
 
   if (user) {
     loggedOut.style.display = "none";
-    loggedIn.style.display = "flex";
+    loggedIn.style.display = "block";
     document.getElementById("userDisplay").textContent = emailToUsername(user.email);
-
-    loadLocalData();
-    startScheduleListener();
+    applyTimeBasedGreeting();
     registerInDirectory(user);
-    render();
+    initFriendsDropdown(user.uid, emailToUsername(user.email));
+
+    if (friendMode) {
+      loadFriendSchedule();
+    } else {
+      loadLocalData();
+      startScheduleListener();
+      loadPublishState();
+      render();
+    }
   } else {
     loggedOut.style.display = "block";
     loggedIn.style.display = "none";
+    teardownFriendsDropdown();
 
-    loadLocalData();
-    setSyncStatus("Sign in to sync your schedule to Firebase.");
-    render();
+    if (friendMode) {
+      setSyncStatus("Sign in to view this schedule.");
+    } else {
+      loadLocalData();
+      setSyncStatus("Sign in to sync your schedule to Firebase.");
+      render();
+    }
   }
 });
 
@@ -1209,8 +2019,20 @@ window.jumpToWeek = jumpToWeek;
 window.addShift = addShift;
 window.deleteShift = deleteShift;
 window.downloadWeekPDF = downloadWeekPDF;
+window.setSchedulePublished = setSchedulePublished;
+window.changeFriendWeek = changeFriendWeek;
+window.startEditShift = startEditShift;
+window.cancelEditShift = cancelEditShift;
+window.scanScheduleImage = scanScheduleImage;
+window.updateDraftShift = updateDraftShift;
+window.removeDraftShift = removeDraftShift;
+window.confirmDraftShifts = confirmDraftShifts;
+window.onTaxSettingsChange = onTaxSettingsChange;
+window.recalcTaxSummary = recalcTaxSummary;
 
 (async () => {
+  populateTaxStateOptions();
+  if (friendMode) return;
   await checkStorage();
   loadLocalData();
   render();
