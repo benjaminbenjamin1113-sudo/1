@@ -380,7 +380,8 @@
     escapeHtml,
     registerInDirectory,
     showToast,
-    applyTimeBasedGreeting
+    applyTimeBasedGreeting,
+    takeHomeFromGross
   } from "./shared/firebase.js";
   import {
     initFriendsDropdown,
@@ -703,12 +704,18 @@
       return;
     }
 
-    const income = computeScheduledIncomeForMonth(scheduleDataCache, monthKey(currentMonthOffset));
+    const grossIncome = computeScheduledIncomeForMonth(scheduleDataCache, monthKey(currentMonthOffset));
 
-    if (income <= 0) {
+    if (grossIncome <= 0) {
       card.innerHTML = `<div class="empty-state">No scheduled income with an hourly rate found for this month yet.</div>`;
       return;
     }
+
+    // Take-home, not gross — this is the number that's actually in the
+    // bank for spending to come out of, using the same "Paycheck
+    // Deductions" % set on the Schedule page's tax card.
+    const income = takeHomeFromGross(grossIncome, scheduleDataCache.taxSettings);
+    const isDeducted = income < grossIncome;
 
     const maxSpend = income * (1 - SAVINGS_TARGET);
     const remaining = maxSpend - spentThisMonth;
@@ -723,7 +730,10 @@
       <div class="savings-remaining ${remaining >= 0 ? "positive" : "negative"}">
         ${remaining >= 0 ? `$${remaining.toFixed(2)} left to spend` : `$${Math.abs(remaining).toFixed(2)} over budget`}
       </div>
-      <div class="savings-sub">Based on $${income.toFixed(2)} scheduled income this month — a 20% spending cap is $${maxSpend.toFixed(2)}.</div>
+      <div class="savings-sub">
+        Based on $${income.toFixed(2)} take-home this month${isDeducted ? ` (of $${grossIncome.toFixed(2)} gross)` : ""} — a 20% spending cap is $${maxSpend.toFixed(2)}.
+        ${isDeducted ? "" : ` Set your Paycheck Deductions on the Schedule page for a more accurate, post-tax number.`}
+      </div>
     `;
   }
 

@@ -612,9 +612,9 @@
   </div>
 
   <div class="overview-card" id="chartCard" style="display: none;">
-    <div class="section-title">📊 Income vs. Expenses</div>
+    <div class="section-title">📊 Take-Home vs. Expenses</div>
     <div class="chart-legend">
-      <span><span class="chart-legend-dot income"></span>Income</span>
+      <span><span class="chart-legend-dot income"></span>Take-Home</span>
       <span><span class="chart-legend-dot expense"></span>Expenses</span>
     </div>
     <div class="chart-row" id="incomeExpenseChart"></div>
@@ -752,7 +752,8 @@
     escapeHtml,
     registerInDirectory,
     showToast,
-    applyTimeBasedGreeting
+    applyTimeBasedGreeting,
+    takeHomeFromGross
   } from "./shared/firebase.js";
   import {
     signInWithEmailAndPassword,
@@ -810,7 +811,8 @@
 
   let scheduleData = {
     weeks: {},
-    jobRates: {}
+    jobRates: {},
+    taxSettings: {}
   };
 
   let expenseData = {
@@ -857,7 +859,8 @@
 
         scheduleData = {
           weeks: parsedSchedule.weeks || {},
-          jobRates: parsedSchedule.jobRates || {}
+          jobRates: parsedSchedule.jobRates || {},
+          taxSettings: parsedSchedule.taxSettings || {}
         };
       }
     } catch (error) {
@@ -971,7 +974,8 @@
 
           scheduleData = {
             weeks: cloudSchedule.weeks || {},
-            jobRates: cloudSchedule.jobRates || {}
+            jobRates: cloudSchedule.jobRates || {},
+            taxSettings: cloudSchedule.taxSettings || {}
           };
 
           scheduleCloudLoaded = true;
@@ -1139,6 +1143,14 @@
     return total;
   }
 
+  // Take-home, not gross — this is the number expenses actually come out
+  // of, using the same "Paycheck Deductions" % the Schedule page's tax
+  // card saves (via takeHomeFromGross from shared/firebase.js). With no
+  // deductions entered yet, this is identical to gross.
+  function getMonthlyTakeHome(offset) {
+    return takeHomeFromGross(getMonthlyEarnings(offset), scheduleData.taxSettings);
+  }
+
   function getMonthlyExpenseTotal(offset) {
     const key = monthKey(offset);
     const list = Array.isArray(expenseData.months?.[key]) ? expenseData.months[key] : [];
@@ -1234,9 +1246,16 @@
       </div>
 
       <div class="overview-row">
-        <div class="overview-label">💰 Estimated pay</div>
+        <div class="overview-label">💰 Estimated pay (gross)</div>
         <div class="overview-value success">
           ${totalPay > 0 ? `$${totalPay.toFixed(2)}` : "—"}
+        </div>
+      </div>
+
+      <div class="overview-row">
+        <div class="overview-label">🧾 Take-home (est.)</div>
+        <div class="overview-value success">
+          ${totalPay > 0 ? `$${takeHomeFromGross(totalPay, scheduleData.taxSettings).toFixed(2)}` : "—"}
         </div>
       </div>
 
@@ -1372,32 +1391,11 @@
 
   function renderNetCard() {
     const currentMonthKey = monthKey(0);
-    const [currentYear, currentMonth] = currentMonthKey.split("-").map(Number);
 
-    let monthlyEarnings = 0;
-
-    Object.entries(scheduleData.weeks || {}).forEach(([weekStartKey, shifts]) => {
-      if (!Array.isArray(shifts)) {
-        return;
-      }
-
-      shifts.forEach(shift => {
-        const shiftDate = getShiftDate(weekStartKey, shift.day);
-
-        if (!shiftDate) {
-          return;
-        }
-
-        const isInCurrentMonth =
-          shiftDate.getFullYear() === currentYear &&
-          shiftDate.getMonth() === currentMonth - 1;
-
-        if (isInCurrentMonth) {
-          monthlyEarnings +=
-            (Number(shift.hours) || 0) * (Number(shift.rate) || 0);
-        }
-      });
-    });
+    // Take-home, not gross — expenses come out of what actually lands in
+    // the bank, not the number on paper before taxes.
+    const monthlyGross = getMonthlyEarnings(0);
+    const monthlyTakeHome = getMonthlyTakeHome(0);
 
     const currentMonthExpenses = Array.isArray(expenseData.months?.[currentMonthKey])
       ? expenseData.months[currentMonthKey]
@@ -1407,13 +1405,13 @@
       return sum + (Number(expense.amount) || 0);
     }, 0);
 
-    const net = monthlyEarnings - monthlyExpenses;
+    const net = monthlyTakeHome - monthlyExpenses;
 
     const netCard = document.getElementById("netCard");
     const netValue = document.getElementById("netValue");
     const netSub = document.getElementById("netSub");
 
-    if (monthlyEarnings === 0 && monthlyExpenses === 0) {
+    if (monthlyGross === 0 && monthlyExpenses === 0) {
       netCard.style.display = "none";
       return;
     }
@@ -1425,18 +1423,22 @@
     netValue.className =
       `net-value ${net >= 0 ? "positive" : "negative"}`;
 
+    const deductedNote = monthlyTakeHome < monthlyGross
+      ? ` (of $${monthlyGross.toFixed(2)} gross)`
+      : "";
+
     netSub.textContent =
-      `Current month: earned $${monthlyEarnings.toFixed(2)} · spent $${monthlyExpenses.toFixed(2)}`;
+      `Current month: take-home $${monthlyTakeHome.toFixed(2)}${deductedNote} · spent $${monthlyExpenses.toFixed(2)}`;
   }
 
   function renderMonthlyRecap() {
     const card = document.getElementById("recapCard");
     const content = document.getElementById("recapContent");
 
-    const income = getMonthlyEarnings(0);
+    const income = getMonthlyTakeHome(0);
     const expenses = getMonthlyExpenseTotal(0);
 
-    if (income === 0 && expenses === 0) {
+    if (getMonthlyEarnings(0) === 0 && expenses === 0) {
       card.style.display = "none";
       return;
     }
@@ -1448,7 +1450,7 @@
     const net = income - expenses;
     const savingsRate = income > 0 ? (net / income) * 100 : null;
 
-    const prevIncome = getMonthlyEarnings(-1);
+    const prevIncome = getMonthlyTakeHome(-1);
     const prevExpenses = getMonthlyExpenseTotal(-1);
 
     const currentMonthKey = monthKey(0);
@@ -1484,7 +1486,7 @@
       <div class="recap-highlight">
         <div class="recap-stat">
           <div class="recap-stat-value success">$${income.toFixed(0)}</div>
-          <div class="recap-stat-label">Income</div>
+          <div class="recap-stat-label">Take-Home</div>
           ${trendHtml(income, prevIncome, false)}
         </div>
         <div class="recap-stat">
@@ -1521,7 +1523,7 @@
     const months = [-5, -4, -3, -2, -1, 0].map(offset => ({
       offset,
       label: formatMonthShort(offset),
-      income: getMonthlyEarnings(offset),
+      income: getMonthlyTakeHome(offset),
       expenses: getMonthlyExpenseTotal(offset)
     }));
 
@@ -1542,7 +1544,7 @@
       const expenseHeight = Math.round((m.expenses / maxValue) * maxBarHeight);
 
       return `
-        <div class="chart-col" title="${m.label}: earned $${m.income.toFixed(2)}, spent $${m.expenses.toFixed(2)}">
+        <div class="chart-col" title="${m.label}: take-home $${m.income.toFixed(2)}, spent $${m.expenses.toFixed(2)}">
           <div class="chart-bars">
             <div class="chart-bar income" style="height:${Math.max(2, incomeHeight)}px"></div>
             <div class="chart-bar expense" style="height:${Math.max(2, expenseHeight)}px"></div>
