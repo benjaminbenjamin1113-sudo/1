@@ -54,6 +54,26 @@ export async function registerInDirectory(user) {
   }
 }
 
+// Turns a gross pay figure into take-home, using the same "Paycheck
+// Deductions" settings schedule.html's tax card saves on the user doc as
+// `taxSettings` ({ federalPct, statePct, ficaPct, otherPct, ... }) — plain
+// percentages of gross, not a tax-bracket estimate (see the comment above
+// schedule.html's recalcTaxSummary for why). Shared here so every page that
+// needs "what actually lands in the bank" — the dashboard's net card and
+// the expenses page's savings budget — uses the exact same math as the
+// Schedule page instead of a second implementation that could drift from
+// it. Missing/zero settings fall back to 0% deducted, i.e. net === gross.
+export function takeHomePctFromSettings(taxSettings) {
+  const s = taxSettings || {};
+  const deductedPct = (Number(s.federalPct) || 0) + (Number(s.statePct) || 0) +
+    (Number(s.ficaPct) || 0) + (Number(s.otherPct) || 0);
+  return Math.max(0, 100 - Math.min(100, deductedPct));
+}
+
+export function takeHomeFromGross(gross, taxSettings) {
+  return (Number(gross) || 0) * takeHomePctFromSettings(taxSettings) / 100;
+}
+
 export function showToast(message) {
   const toast = document.getElementById("toast");
   if (!toast) return;
