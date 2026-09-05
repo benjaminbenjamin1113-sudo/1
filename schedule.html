@@ -304,7 +304,7 @@
   <div class="card">
     <div class="auth-header">🧾 Paycheck Deductions</div>
     <div class="visibility-desc" style="margin-bottom:10px;">
-      What actually gets taken out of your paycheck — federal tax, your state's tax (if any), and FICA. A rough planning estimate, not tax advice.
+      Enter what actually comes off your paycheck — check a real pay stub for the exact numbers. This applies those percentages straight to the gross pay already calculated from your logged hours for the week below, so it moves with your actual weekly hours instead of guessing from a tax bracket.
     </div>
 
     <div class="form-row">
@@ -313,45 +313,38 @@
         <select id="taxState" onchange="onTaxSettingsChange()"></select>
       </div>
       <div>
-        <label for="taxFilingStatus">Filing status</label>
-        <select id="taxFilingStatus" onchange="onTaxSettingsChange()">
-          <option value="single">Single</option>
-          <option value="marriedJoint">Married filing jointly</option>
-          <option value="headOfHousehold">Head of household</option>
-        </select>
+        <label for="taxFicaPct">FICA % (Social Security + Medicare)</label>
+        <input id="taxFicaPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 7.65" oninput="onTaxSettingsChange()">
       </div>
     </div>
 
-    <div class="visibility-desc" id="taxStateNote" style="margin-bottom:10px;"></div>
+    <div class="form-row">
+      <div>
+        <label for="taxFederalPct">Federal tax %</label>
+        <input id="taxFederalPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 12" oninput="onTaxSettingsChange()">
+      </div>
+      <div>
+        <label for="taxStatePct">State tax %</label>
+        <input id="taxStatePct" type="number" min="0" max="100" step="0.01" placeholder="0 if no state income tax" oninput="onTaxSettingsChange()">
+      </div>
+    </div>
 
     <div class="form-row">
       <div>
-        <label for="taxAnnualIncome">Estimated annual pay ($)</label>
-        <input id="taxAnnualIncome" type="number" min="0" step="100" oninput="recalcTaxSummary()" onchange="onTaxSettingsChange()">
-        <label style="display:flex; align-items:center; gap:6px; margin-top:6px; font-size:11px; font-weight:400; color:var(--text-dim);">
-          <input type="checkbox" id="taxAutoAnnual" style="width:auto;" onchange="onTaxAutoToggle()">
-          Auto-calculate from this week's scheduled hours × 52
-        </label>
+        <label for="taxOtherPct">Other deductions %</label>
+        <input id="taxOtherPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 401k + insurance" oninput="onTaxSettingsChange()">
       </div>
       <div>
-        <label for="taxPeriods">Pay frequency</label>
-        <select id="taxPeriods" onchange="onTaxSettingsChange()">
-          <option value="52">Weekly</option>
-          <option value="26" selected>Biweekly</option>
-          <option value="24">Semi-monthly</option>
-          <option value="12">Monthly</option>
-        </select>
+        <label for="taxOtherLabel">What's the "other" for?</label>
+        <input id="taxOtherLabel" type="text" placeholder="401k, health insurance, etc." oninput="onTaxSettingsChange()">
       </div>
     </div>
 
     <div class="insight-title" style="margin-top:4px;">This week's take-home</div>
-    <div class="visibility-desc" style="margin-bottom:8px;">Based on the hours actually logged for the week you're viewing above, taxed at the effective rate implied by your estimated annual pay.</div>
-    <div class="summary-grid" id="weeklyTaxSummary"></div>
-
-    <div class="insight-title" style="margin-top:14px;">Per-paycheck / per-year estimate</div>
+    <div class="visibility-desc" style="margin-bottom:8px;">Based on the hours actually logged for the week you're viewing above, at the percentages you entered.</div>
     <div class="summary-grid" id="taxSummary"></div>
 
-    <div class="insight-title" id="taxBreakdownLabel" style="margin-top:14px; display:none;">Where your paycheck deduction goes</div>
+    <div class="insight-title" id="taxBreakdownLabel" style="margin-top:14px; display:none;">Where it goes</div>
     <div id="taxDeductionBreakdown"></div>
   </div>
 </div>
@@ -418,16 +411,27 @@ import {
   initFriendsDropdown,
   teardownFriendsDropdown
 } from "./shared/notifications.js";
-// shared/tax.js is loaded lazily below (loadTaxModule), NOT as a static
-// import here. A static import that fails (missing file, bad path, etc.)
-// kills this entire module — including the Firebase auth listener that
-// logs you in automatically — which is exactly what was happening: the
-// tax estimator's own import was taking the whole page down with it.
-// Loading it on demand means a tax.js problem only breaks the tax card,
-// never login or anything else on the page.
+// The paycheck-deductions card no longer imports shared/tax.js at all —
+// it used to lazy-load it for IRS-bracket-based estimates, but that's
+// replaced with user-entered percentages (see the Paycheck Deductions
+// section below), so there's no external module for it to depend on.
 
 const STORAGE_KEY = "benjamin-schedule-tracker-data";
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const US_STATES = [
+  ["", "Select a state…"],
+  ["AL", "Alabama"], ["AK", "Alaska"], ["AZ", "Arizona"], ["AR", "Arkansas"], ["CA", "California"],
+  ["CO", "Colorado"], ["CT", "Connecticut"], ["DE", "Delaware"], ["DC", "Washington DC"], ["FL", "Florida"],
+  ["GA", "Georgia"], ["HI", "Hawaii"], ["ID", "Idaho"], ["IL", "Illinois"], ["IN", "Indiana"],
+  ["IA", "Iowa"], ["KS", "Kansas"], ["KY", "Kentucky"], ["LA", "Louisiana"], ["ME", "Maine"],
+  ["MD", "Maryland"], ["MA", "Massachusetts"], ["MI", "Michigan"], ["MN", "Minnesota"], ["MS", "Mississippi"],
+  ["MO", "Missouri"], ["MT", "Montana"], ["NE", "Nebraska"], ["NV", "Nevada"], ["NH", "New Hampshire"],
+  ["NJ", "New Jersey"], ["NM", "New Mexico"], ["NY", "New York"], ["NC", "North Carolina"], ["ND", "North Dakota"],
+  ["OH", "Ohio"], ["OK", "Oklahoma"], ["OR", "Oregon"], ["PA", "Pennsylvania"], ["RI", "Rhode Island"],
+  ["SC", "South Carolina"], ["SD", "South Dakota"], ["TN", "Tennessee"], ["TX", "Texas"], ["UT", "Utah"],
+  ["VT", "Vermont"], ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"],
+  ["WY", "Wyoming"]
+];
 
 const urlParams = new URLSearchParams(location.search);
 const friendUid = urlParams.get("friend");
@@ -1369,221 +1373,104 @@ async function confirmDraftShifts() {
 // Paycheck / tax estimate card.
 // ---------------------------------------------------------------------
 
-let taxModule = null;
-let taxModuleFailed = false;
+// Paycheck deductions card.
+// Deliberately NOT a tax-bracket estimator. The user types in the actual
+// percentages their own pay stub shows for federal, state, FICA, and any
+// other deduction — this just applies those percentages straight to the
+// gross pay already computed for the week being viewed (hours × rate, via
+// getWeekTotals), so it always reflects real logged hours instead of an
+// annualized guess. If withholding ever changes, updating the number here
+// is the whole fix — no bracket data to keep current.
+// ---------------------------------------------------------------------
 
-// Loads shared/tax.js on first actual use instead of at page load, so a
-// broken/missing tax.js can never block auth or the rest of the page from
-// working (see the comment up by the other imports). Cached after the
-// first successful load; if it fails, we remember that and stop retrying
-// every keystroke — the tax card just shows a clear message instead.
-async function loadTaxModule() {
-  if (taxModule) return taxModule;
-  if (taxModuleFailed) return null;
-
-  try {
-    taxModule = await import("./shared/tax.js");
-    return taxModule;
-  } catch (error) {
-    console.error("Could not load shared/tax.js — tax estimate unavailable:", error);
-    taxModuleFailed = true;
-    return null;
-  }
-}
-
-async function populateTaxStateOptions() {
+function populateTaxStateOptions() {
   const select = document.getElementById("taxState");
-  const mod = await loadTaxModule();
-
-  if (!mod) {
-    select.innerHTML = `<option value="">Unavailable</option>`;
-    return;
-  }
-
-  select.innerHTML = mod.US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
+  select.innerHTML = US_STATES.map(([code, name]) => `<option value="${code}">${escapeHtml(name)}</option>`).join("");
 }
 
-// One line under the state/filing-status row telling the user, in plain
-// language, how their chosen state actually treats paycheck withholding —
-// since "no state income tax" states (NV, TX, FL, WA, ...) should visibly
-// zero out that line rather than just showing "$0" with no explanation.
-async function updateTaxStateNote() {
-  const noteEl = document.getElementById("taxStateNote");
-  const code = document.getElementById("taxState").value;
-  const mod = await loadTaxModule();
-
-  if (!mod) {
-    noteEl.textContent = "Tax estimate is unavailable right now.";
-    return;
-  }
-
-  if (!code) {
-    noteEl.textContent = "Pick a state to see how it affects your paycheck.";
-    return;
-  }
-
-  const [, stateName] = mod.US_STATES.find(([c]) => c === code) || [code, code];
-  const info = mod.STATE_TAX[code];
-
-  if (!info || info.type === "none") {
-    noteEl.textContent = `${stateName} has no state income tax — only federal tax and FICA come out of your paycheck.`;
-  } else if (info.type === "flat") {
-    noteEl.textContent = `${stateName} withholds state income tax at a flat ${(info.rate * 100).toFixed(2)}% above the standard deduction.`;
-  } else {
-    noteEl.textContent = `${stateName} withholds state income tax on a bracket schedule — the rate rises with how much you earn.`;
-  }
-}
-
-async function loadTaxSettingsIntoForm() {
+function loadTaxSettingsIntoForm() {
   const settings = data.taxSettings || {};
-  // Auto mode is the default for anyone who hasn't touched this before —
-  // only an explicit `false` (a prior manual entry) turns it off.
-  const autoAnnual = settings.autoAnnual !== false;
-
   document.getElementById("taxState").value = settings.state || "";
-  document.getElementById("taxFilingStatus").value = settings.filingStatus || "single";
-  document.getElementById("taxPeriods").value = String(settings.periods || 26);
-  document.getElementById("taxAutoAnnual").checked = autoAnnual;
-
-  const annualInput = document.getElementById("taxAnnualIncome");
-  annualInput.disabled = autoAnnual;
-
-  if (autoAnnual) {
-    const { totalPay } = getWeekTotals(currentWeekOffset);
-    annualInput.value = totalPay > 0 ? Math.round(totalPay * 52) : "";
-  } else if (settings.annualIncome != null) {
-    annualInput.value = settings.annualIncome;
-  } else {
-    annualInput.value = "";
-  }
-
-  await updateTaxStateNote();
-  await recalcTaxSummary();
+  document.getElementById("taxFederalPct").value = settings.federalPct ?? "";
+  document.getElementById("taxStatePct").value = settings.statePct ?? "";
+  document.getElementById("taxFicaPct").value = settings.ficaPct ?? "";
+  document.getElementById("taxOtherPct").value = settings.otherPct ?? "";
+  document.getElementById("taxOtherLabel").value = settings.otherLabel || "";
+  recalcTaxSummary();
 }
 
 function onTaxSettingsChange() {
-  const autoAnnual = document.getElementById("taxAutoAnnual").checked;
   data.taxSettings = {
     state: document.getElementById("taxState").value,
-    filingStatus: document.getElementById("taxFilingStatus").value,
-    periods: Number(document.getElementById("taxPeriods").value) || 26,
-    autoAnnual,
-    // Only persist a manual override when auto mode is off — otherwise
-    // a stale manual figure would silently take over the next time auto
-    // mode gets toggled back on.
-    annualIncome: autoAnnual ? null : (Number(document.getElementById("taxAnnualIncome").value) || null)
+    federalPct: document.getElementById("taxFederalPct").value === "" ? null : Number(document.getElementById("taxFederalPct").value),
+    statePct: document.getElementById("taxStatePct").value === "" ? null : Number(document.getElementById("taxStatePct").value),
+    ficaPct: document.getElementById("taxFicaPct").value === "" ? null : Number(document.getElementById("taxFicaPct").value),
+    otherPct: document.getElementById("taxOtherPct").value === "" ? null : Number(document.getElementById("taxOtherPct").value),
+    otherLabel: document.getElementById("taxOtherLabel").value
   };
 
-  updateTaxStateNote();
   recalcTaxSummary();
   saveLocalData();
   saveCloudData();
 }
 
-// Flips auto mode on/off. Turning it on immediately overwrites whatever
-// was typed in the field with this week's scheduled pay × 52; turning it
-// off just unlocks the field so a manual figure can be typed in.
-function onTaxAutoToggle() {
-  const autoAnnual = document.getElementById("taxAutoAnnual").checked;
-  const annualInput = document.getElementById("taxAnnualIncome");
-  annualInput.disabled = autoAnnual;
-
-  if (autoAnnual) {
-    const { totalPay } = getWeekTotals(currentWeekOffset);
-    annualInput.value = totalPay > 0 ? Math.round(totalPay * 52) : "";
-  }
-
-  onTaxSettingsChange();
-}
-
-async function recalcTaxSummary() {
+function recalcTaxSummary() {
   const summaryEl = document.getElementById("taxSummary");
   const breakdownEl = document.getElementById("taxDeductionBreakdown");
   const breakdownLabel = document.getElementById("taxBreakdownLabel");
-  const weeklyEl = document.getElementById("weeklyTaxSummary");
-  const annualIncome = Number(document.getElementById("taxAnnualIncome").value) || 0;
 
-  const mod = await loadTaxModule();
-  if (!mod) {
-    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Tax estimate is unavailable right now — everything else on this page still works fine.</div>`;
-    breakdownEl.innerHTML = "";
-    breakdownLabel.style.display = "none";
-    weeklyEl.innerHTML = "";
-    return;
-  }
-
-  if (!annualIncome) {
-    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Enter an estimated annual pay to see your paycheck deductions.</div>`;
-    breakdownEl.innerHTML = "";
-    breakdownLabel.style.display = "none";
-    weeklyEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Log shifts with a pay rate this week — and either turn on auto-calculate or enter an estimated annual pay — to see your take-home for the week.</div>`;
-    return;
-  }
-
-  const stateCode = document.getElementById("taxState").value;
-  const [, stateName] = mod.US_STATES.find(([c]) => c === stateCode) || [stateCode, "your state"];
-
-  const result = mod.estimatePaycheck({
-    annualGross: annualIncome,
-    filingStatus: document.getElementById("taxFilingStatus").value,
-    stateCode,
-    periodsPerYear: Number(document.getElementById("taxPeriods").value) || 26
-  });
-
-  const totalDeducted = result.perPeriod.gross - result.perPeriod.net;
-  const deductedPct = result.perPeriod.gross ? (totalDeducted / result.perPeriod.gross) * 100 : 0;
-
-  // result.totalTax is already the full YEAR's deduction regardless of
-  // which pay frequency is selected above (periodsPerYear only changes
-  // how it's sliced into perPeriod figures) — so dividing it by the
-  // annual gross gives one effective rate that correctly reflects
-  // progressive brackets at this income level. Applying that rate to
-  // this week's actual scheduled gross (which can vary week to week)
-  // is a much better estimate of this week's take-home than just
-  // dividing the annual figure evenly by 52.
-  const effectiveRate = result.annualGross > 0 ? result.totalTax / result.annualGross : 0;
   const { totalHours: weekHours, totalPay: weekGross } = getWeekTotals(currentWeekOffset);
 
   if (weekGross <= 0) {
-    weeklyEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Log shifts with a pay rate for ${formatWeekLabel(currentWeekOffset)} to see your take-home for the week.</div>`;
-  } else {
-    const weekTax = weekGross * effectiveRate;
-    const weekNet = weekGross - weekTax;
-    weeklyEl.innerHTML = `
-      <div class="stat"><div class="stat-value">${weekHours.toFixed(1)}</div><div class="stat-label">Scheduled Hours</div></div>
-      <div class="stat"><div class="stat-value">$${weekGross.toFixed(2)}</div><div class="stat-label">Gross This Week</div></div>
-      <div class="stat"><div class="stat-value">$${weekNet.toFixed(2)}</div><div class="stat-label">Take-Home This Week</div></div>
-      <div class="stat"><div class="stat-value">${(effectiveRate * 100).toFixed(1)}%</div><div class="stat-label">Effective Tax Rate</div></div>
-    `;
+    summaryEl.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">Log shifts with a pay rate for ${formatWeekLabel(currentWeekOffset)} to see your take-home for the week.</div>`;
+    breakdownEl.innerHTML = "";
+    breakdownLabel.style.display = "none";
+    return;
   }
 
-  // Leads with "what comes out" and "what you keep" — the two numbers that
-  // actually answer "what will I be paid" — before the per-year totals.
+  const federalPct = Number(document.getElementById("taxFederalPct").value) || 0;
+  const statePct = Number(document.getElementById("taxStatePct").value) || 0;
+  const ficaPct = Number(document.getElementById("taxFicaPct").value) || 0;
+  const otherPct = Number(document.getElementById("taxOtherPct").value) || 0;
+  const otherLabel = document.getElementById("taxOtherLabel").value.trim() || "Other deductions";
+
+  const federalAmt = weekGross * federalPct / 100;
+  const stateAmt = weekGross * statePct / 100;
+  const ficaAmt = weekGross * ficaPct / 100;
+  const otherAmt = weekGross * otherPct / 100;
+  const totalDeducted = federalAmt + stateAmt + ficaAmt + otherAmt;
+  const net = weekGross - totalDeducted;
+  const deductedPct = federalPct + statePct + ficaPct + otherPct;
+
+  const stateCode = document.getElementById("taxState").value;
+  const [, stateName] = US_STATES.find(([c]) => c === stateCode) || ["", "your state"];
+
   summaryEl.innerHTML = `
-    <div class="stat"><div class="stat-value">$${totalDeducted.toFixed(2)}</div><div class="stat-label">Total Deducted / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${result.perPeriod.net.toFixed(2)}</div><div class="stat-label">Take-Home / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">$${result.perPeriod.gross.toFixed(2)}</div><div class="stat-label">Gross / Paycheck</div></div>
-    <div class="stat"><div class="stat-value">${deductedPct.toFixed(1)}%</div><div class="stat-label">% Deducted</div></div>
-    <div class="stat"><div class="stat-value">$${result.netAnnual.toFixed(0)}</div><div class="stat-label">Est. Net / Year</div></div>
-    <div class="stat"><div class="stat-value">$${result.totalTax.toFixed(0)}</div><div class="stat-label">Total Deducted / Year</div></div>
+    <div class="stat"><div class="stat-value">${weekHours.toFixed(1)}</div><div class="stat-label">Scheduled Hours</div></div>
+    <div class="stat"><div class="stat-value">$${weekGross.toFixed(2)}</div><div class="stat-label">Gross This Week</div></div>
+    <div class="stat"><div class="stat-value">$${totalDeducted.toFixed(2)}</div><div class="stat-label">Total Deducted</div></div>
+    <div class="stat"><div class="stat-value">$${net.toFixed(2)}</div><div class="stat-label">Take-Home This Week</div></div>
+    <div class="stat"><div class="stat-value">${deductedPct.toFixed(2)}%</div><div class="stat-label">% Deducted</div></div>
+    <div class="stat"><div class="stat-value">$${(net * 52).toFixed(0)}</div><div class="stat-label">Take-Home / Year, If Every Week Matched This</div></div>
   `;
 
-  // The per-source breakdown, called out separately so the state's own
-  // slice of the deduction (the part that changes if he ever works or
-  // moves to a different state) is easy to see on its own.
   breakdownLabel.style.display = "block";
   breakdownEl.innerHTML = `
     <div class="insight-row">
-      <div class="insight-row-label">Federal income tax</div>
-      <div class="insight-row-value">$${result.perPeriod.federal.toFixed(2)} / paycheck · $${result.federal.toFixed(0)}/yr</div>
+      <div class="insight-row-label">Federal tax (${federalPct}%)</div>
+      <div class="insight-row-value">$${federalAmt.toFixed(2)}</div>
     </div>
     <div class="insight-row">
-      <div class="insight-row-label">${escapeHtml(stateName)} state tax</div>
-      <div class="insight-row-value">${result.state > 0 ? `$${result.perPeriod.state.toFixed(2)} / paycheck · $${result.state.toFixed(0)}/yr` : "$0 — no state income tax"}</div>
+      <div class="insight-row-label">${escapeHtml(stateName)} state tax (${statePct}%)</div>
+      <div class="insight-row-value">$${stateAmt.toFixed(2)}</div>
     </div>
     <div class="insight-row">
-      <div class="insight-row-label">FICA (Social Security + Medicare)</div>
-      <div class="insight-row-value">$${result.perPeriod.fica.toFixed(2)} / paycheck · $${result.fica.total.toFixed(0)}/yr</div>
+      <div class="insight-row-label">FICA (${ficaPct}%)</div>
+      <div class="insight-row-value">$${ficaAmt.toFixed(2)}</div>
+    </div>
+    <div class="insight-row">
+      <div class="insight-row-label">${escapeHtml(otherLabel)} (${otherPct}%)</div>
+      <div class="insight-row-value">$${otherAmt.toFixed(2)}</div>
     </div>
   `;
 }
