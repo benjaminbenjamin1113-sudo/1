@@ -310,13 +310,15 @@
     <div class="form-row">
       <div>
         <label for="taxState">State (where you work)</label>
-        <select id="taxState" onchange="onTaxSettingsChange()"></select>
+        <select id="taxState" onchange="onStateSelected()"></select>
       </div>
       <div>
         <label for="taxFicaPct">FICA % (Social Security + Medicare)</label>
-        <input id="taxFicaPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 7.65" oninput="onTaxSettingsChange()">
+        <input id="taxFicaPct" type="number" min="0" max="100" step="0.01" placeholder="e.g. 7.65" oninput="onFicaPctManualEdit()">
       </div>
     </div>
+
+    <div class="visibility-desc" id="taxStateNote" style="margin-bottom:10px;"></div>
 
     <div class="form-row">
       <div>
@@ -325,7 +327,7 @@
       </div>
       <div>
         <label for="taxStatePct">State tax %</label>
-        <input id="taxStatePct" type="number" min="0" max="100" step="0.01" placeholder="0 if no state income tax" oninput="onTaxSettingsChange()">
+        <input id="taxStatePct" type="number" min="0" max="100" step="0.01" placeholder="0 if no state income tax" oninput="onStatePctManualEdit()">
       </div>
     </div>
 
@@ -432,6 +434,22 @@ const US_STATES = [
   ["VT", "Vermont"], ["VA", "Virginia"], ["WA", "Washington"], ["WV", "West Virginia"], ["WI", "Wisconsin"],
   ["WY", "Wyoming"]
 ];
+
+// Rough single-number starting points, NOT real bracket data — picking a
+// state just pre-fills a plausible State tax % (0 for the no-income-tax
+// states) so there's something reasonable in the field instead of a blank,
+// but it's meant to be overwritten with whatever a real pay stub shows.
+// FICA gets the same treatment: the standard 6.2% Social Security + 1.45%
+// Medicare employee share, pre-filled the same way.
+const STATE_TAX_SUGGESTIONS = {
+  AL: 4, AK: 0, AZ: 2.5, AR: 3.9, CA: 6, CO: 4.4, CT: 5.5, DE: 4.8, DC: 6.5, FL: 0,
+  GA: 5.19, HI: 7.2, ID: 5.3, IL: 4.95, IN: 3.05, IA: 3.8, KS: 5.25, KY: 4, LA: 3,
+  ME: 6.75, MD: 4.75, MA: 5, MI: 4.25, MN: 6.8, MS: 4.4, MO: 4, MT: 5.9, NE: 5.01,
+  NV: 0, NH: 0, NJ: 5.53, NM: 4.7, NY: 5.5, NC: 4.25, ND: 1.9, OH: 2.75, OK: 4.25,
+  OR: 8.75, PA: 3.07, RI: 4.75, SC: 6.2, SD: 0, TN: 0, TX: 0, UT: 4.55, VT: 6.6,
+  VA: 5, WA: 0, WV: 4.78, WI: 5.3, WY: 0
+};
+const FICA_SUGGESTION_PCT = 7.65;
 
 const urlParams = new URLSearchParams(location.search);
 const friendUid = urlParams.get("friend");
@@ -1396,17 +1414,84 @@ function loadTaxSettingsIntoForm() {
   document.getElementById("taxFicaPct").value = settings.ficaPct ?? "";
   document.getElementById("taxOtherPct").value = settings.otherPct ?? "";
   document.getElementById("taxOtherLabel").value = settings.otherLabel || "";
+  // Just describes whatever's already saved — doesn't re-run the autofill
+  // itself, so reopening the page never overwrites a value the user typed.
+  updateStateSuggestionNote(settings.state || "", { silent: true });
   recalcTaxSummary();
 }
 
-function onTaxSettingsChange() {
+// Fires when the state dropdown changes. Pre-fills State tax % with a
+// rough starting number for that state (0 for the no-income-tax states)
+// and, the first time only, FICA % with the standard 7.65% — but only
+// for fields the user hasn't already typed their own number into, so
+// switching states after fine-tuning the numbers from a real pay stub
+// never clobbers them.
+function onStateSelected() {
+  const code = document.getElementById("taxState").value;
+  const settings = data.taxSettings || {};
+  const statePctAuto = settings.statePctAuto !== false;
+  const ficaPctAuto = settings.ficaPctAuto !== false;
+  const stateInput = document.getElementById("taxStatePct");
+  const ficaInput = document.getElementById("taxFicaPct");
+
+  if (statePctAuto) stateInput.value = code ? STATE_TAX_SUGGESTIONS[code] ?? 0 : "";
+  if (ficaPctAuto && ficaInput.value === "") ficaInput.value = FICA_SUGGESTION_PCT;
+
+  updateStateSuggestionNote(code, { statePctAuto, ficaPctAuto });
+  onTaxSettingsChange({ statePctAuto, ficaPctAuto });
+}
+
+// Typing directly into State tax % means the user now knows their real
+// number — stop auto-filling it on future state changes.
+function onStatePctManualEdit() {
+  updateStateSuggestionNote(document.getElementById("taxState").value, { statePctAuto: false, ficaPctAuto: (data.taxSettings || {}).ficaPctAuto !== false });
+  onTaxSettingsChange({ statePctAuto: false });
+}
+
+// Same idea for FICA %.
+function onFicaPctManualEdit() {
+  updateStateSuggestionNote(document.getElementById("taxState").value, { statePctAuto: (data.taxSettings || {}).statePctAuto !== false, ficaPctAuto: false });
+  onTaxSettingsChange({ ficaPctAuto: false });
+}
+
+// One line explaining what got auto-filled (or why nothing did), so the
+// suggestion never looks like a real, authoritative number.
+function updateStateSuggestionNote(code, { statePctAuto = true, ficaPctAuto = true, silent = false } = {}) {
+  const noteEl = document.getElementById("taxStateNote");
+  if (!noteEl) return;
+
+  if (!code) {
+    noteEl.textContent = "Pick a state to auto-fill a starting State tax % — FICA defaults to the standard 7.65%. Both stay editable, and editing one by hand stops it from being overwritten if you change states later.";
+    return;
+  }
+
+  const [, stateName] = US_STATES.find(([c]) => c === code) || [code, code];
+  const suggestion = STATE_TAX_SUGGESTIONS[code] ?? 0;
+  const filledWhat = [];
+  if (statePctAuto) filledWhat.push(suggestion === 0 ? `State tax % to 0 (${stateName} has no state income tax)` : `State tax % to ${suggestion}% as a rough starting point for ${stateName}`);
+  if (ficaPctAuto) filledWhat.push(`FICA % to the standard ${FICA_SUGGESTION_PCT}%`);
+
+  if (!filledWhat.length) {
+    noteEl.textContent = silent ? "" : `You've entered your own numbers for ${stateName}, so nothing was auto-filled.`;
+    return;
+  }
+  noteEl.textContent = `${silent ? "Auto-filled" : "Filled in"} ${filledWhat.join(" and ")} — these are rough guesses, so check a real pay stub and adjust if yours differ.`;
+}
+
+function onTaxSettingsChange(autoFlagOverrides = {}) {
+  const prev = data.taxSettings || {};
   data.taxSettings = {
     state: document.getElementById("taxState").value,
     federalPct: document.getElementById("taxFederalPct").value === "" ? null : Number(document.getElementById("taxFederalPct").value),
     statePct: document.getElementById("taxStatePct").value === "" ? null : Number(document.getElementById("taxStatePct").value),
     ficaPct: document.getElementById("taxFicaPct").value === "" ? null : Number(document.getElementById("taxFicaPct").value),
     otherPct: document.getElementById("taxOtherPct").value === "" ? null : Number(document.getElementById("taxOtherPct").value),
-    otherLabel: document.getElementById("taxOtherLabel").value
+    otherLabel: document.getElementById("taxOtherLabel").value,
+    // Whether State %/FICA % should still be overwritten the next time the
+    // state changes. Defaults to true (still auto) until the user types
+    // into that field directly (see onStatePctManualEdit/onFicaPctManualEdit).
+    statePctAuto: autoFlagOverrides.statePctAuto ?? (prev.statePctAuto !== false),
+    ficaPctAuto: autoFlagOverrides.ficaPctAuto ?? (prev.ficaPctAuto !== false)
   };
 
   recalcTaxSummary();
@@ -2003,6 +2088,9 @@ window.removeDraftShift = removeDraftShift;
 window.confirmDraftShifts = confirmDraftShifts;
 window.onTaxSettingsChange = onTaxSettingsChange;
 window.recalcTaxSummary = recalcTaxSummary;
+window.onStateSelected = onStateSelected;
+window.onStatePctManualEdit = onStatePctManualEdit;
+window.onFicaPctManualEdit = onFicaPctManualEdit;
 
 (async () => {
   populateTaxStateOptions();
